@@ -1,0 +1,143 @@
+import { query } from "./_generated/server";
+import { loadScope, requireOrg } from "./lib/context";
+import { TERMINAL_LOAD_STATUSES, LoadStatus } from "./constants";
+
+function tzToday(tz: string, dayOffset = 0): { start: number; end: number } {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+  const map: Record<string, string> = {};
+  for (const p of parts) map[p.type] = p.value;
+  const start = Date.UTC(Number(map.year), Number(map.month) - 1, Number(map.day) + dayOffset);
+  return { start, end: start + 864e5 };
+}
+
+const DAY = 864e5;
+
+export const summary = query({
+  args: {},
+  handler: async (ctx) => {
+    const s = await requireOrg(ctx);
+    const scope = loadScope(s);
+    const settings = await ctx.db.query("settings").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).first();
+    const tz = settings?.timezone ?? "UTC";
+    const now = Date.now();
+    const today = tzToday(tz);
+
+    const [carriers, trucks, drivers, loads, messages, invoices, tasks, documents, leads] = await Promise.all([
+      ctx.db.query("carriers").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).collect(),
+      ctx.db.query("trucks").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).collect(),
+      ctx.db.query("drivers").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).collect(),
+      ctx.db.query("loads").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).collect(),
+      ctx.db.query("messages").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).collect(),
+      ctx.db.query("invoices").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).collect(),
+      ctx.db.query("tasks").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).collect(),
+      ctx.db.query("documents").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).collect(),
+      ctx.db.query("leads").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).collect(),
+    ]);
+
+    if (scope.carrierId) {
+      const byCarrier = (l: { carrierId?: string }) => l.carrierId === scope.carrierId;
+      loads.splice(0, loads.length, ...loads.filter(byCarrier));
+      trucks.splice(0, trucks.length, ...trucks.filter(byCarrier));
+      drivers.splice(0, drivers.length, ...drivers.filter(byCarrier));
+      invoices.splice(0, invoices.length, ...invoices.filter(byCarrier));
+    }
+    if (scope.driverId) {
+      loads.splice(0, loads.length, ...loads.filter((l) => l.driverId === scope.driverId));
+    }
+
+    const activeLoads = loads.filter((l) => !TERMINAL_LOAD_STATUSES.includes(l.status as LoadStatus));
+    const inTransit = loads.filter((l) => ["In Transit", "At Delivery"].includes(l.status));
+    const delayed = activeLoads.filter((l) => l.deliveryDate && l.deliveryDate < now && l.status !== "Delivered" && l.status !== "POD Pending");
+    const pickupsToday = loads.filter((l) => l.pickupDate && l.pickupDate >= today.start && l.pickupDate < today.end);
+    const deliveriesToday = loads.filter((l) => l.deliveryDate && l.deliveryDate >= today.start && l.deliveryDate < today.end);
+
+    const nonCancelled = loads.filter((l) => l.status !== "Cancelled");
+    const grossBookedCents = nonCancelled.reduce((sum, l) => sum + (l.grossRateCents ?? 0), 0);
+    const dispatcherRevenueCents = nonCancelled.reduce((sum, l) => sum + (l.feeCents ?? 0), 0);
+    const overdueInvoices = invoices.filter((i) => {
+      if (["Paid", "Cancelled"].includes(i.status)) return false;
+      return i.dueDate ? i.dueDate < now : false;
+    });
+    const outstandingFeesCents = invoices.filter((i) => !["Paid", "Cancelled"].includes(i.status)).reduce((sum, i) => sum + (i.amountCents - i.paidCents), 0);
+    const paidFeesCents = invoices.reduce((sum, i) => sum + i.paidCents, 0);
+
+    // Attention items
+    const urgentMessages = messages
+      .filter((m) => m.priority === "urgent" && ["unread", "needs_reply"].includes(m.status))
+      .sort((a, b) => b._creationTime - a._creationTime)
+      .slice(0, 5);
+    const podStates = ["In Transit", "At Delivery", "Delivered", "POD Pending"];
+    const missingPod = loads
+      .filter((l) => podStates.includes(l.status))
+      .filter((l) => {
+        const pod = documents.some((d) => d.entityType === "load" && d.entityId === l._id && d.type === "POD");
+        return !pod;
+      })
+      .slice(0, 5);
+    const upcomingPickups = loads
+      .filter((l) => !TERMINAL_LOAD_STATUSES.includes(l.status as LoadStatus) && l.pickupDate && l.pickupDate >= today.start && l.pickupDate <= today.start + 2 * DAY)
+      .sort((a, b) => (a.pickupDate ?? 0) - (b.pickupDate ?? 0))
+      .slice(0, 5);
+    const upcomingDeliveries = loads
+      .filter((l) => !TERMINAL_LOAD_STATUSES.includes(l.status as LoadStatus) && l.deliveryDate && l.deliveryDate >= today.start && l.deliveryDate <= today.start + 2 * DAY)
+      .sort((a, b) => (a.deliveryDate ?? 0) - (b.deliveryDate ?? 0))
+      .slice(0, 5);
+    const overdueTasks = tasks.filter((t) => t.status === "Pending" && t.dueAt && t.dueAt < now).sort((a, b) => (a.dueAt ?? 0) - (b.dueAt ?? 0)).slice(0, 5);
+    const expiringCarriers = carriers.filter((c) => c.insuranceExpiry && c.insuranceExpiry > now && c.insuranceExpiry < now + 30 * DAY);
+    const expiringDrivers = drivers.filter((d) => (d.licenseExpiry && d.licenseExpiry < now + 30 * DAY) || (d.medicalCardExpiry && d.medicalCardExpiry < now + 30 * DAY));
+
+    const dailySummaryText = [
+      `${activeLoads.length} active load${activeLoads.length === 1 ? "" : "s"}`,
+      `${inTransit.length} in transit`,
+      `${pickupsToday.length} pickup${pickupsToday.length === 1 ? "" : "s"} today`,
+      `${deliveriesToday.length} deliver${deliveriesToday.length === 1 ? "y" : "ies"} today`,
+      `${trucks.filter((t) => t.availability === "Available").length} of ${trucks.length} trucks available`,
+      `${urgentMessages.length} urgent message${urgentMessages.length === 1 ? "" : "s"}`,
+      `${missingPod.length} load${missingPod.length === 1 ? "" : "s"} missing POD`,
+      `${overdueTasks.length} overdue task${overdueTasks.length === 1 ? "" : "s"}`,
+      `$${(dispatcherRevenueCents / 100).toFixed(2)} dispatcher revenue booked`,
+      `${overdueInvoices.length} overdue invoice${overdueInvoices.length === 1 ? "" : "s"}`,
+    ].join(" · ");
+
+    return {
+      ops: {
+        activeCarriers: carriers.filter((c) => c.status === "Active").length,
+        totalCarriers: carriers.length,
+        trucks: trucks.length,
+        availableTrucks: trucks.filter((t) => t.availability === "Available").length,
+        activeLoads: activeLoads.length,
+        inTransit: inTransit.length,
+        pickupsToday: pickupsToday.length,
+        deliveriesToday: deliveriesToday.length,
+        delayedLoads: delayed.length,
+        urgentIssues: urgentMessages.length + missingPod.length + overdueTasks.length + overdueInvoices.length,
+        availableDrivers: drivers.filter((d) => d.availability === "Available").length,
+      },
+      finance: {
+        grossBookedCents,
+        dispatcherRevenueCents,
+        outstandingFeesCents,
+        paidFeesCents,
+        overdueInvoices: overdueInvoices.length,
+        totalInvoiceCents: invoices.reduce((sum, i) => sum + i.amountCents, 0),
+      },
+      attention: {
+        urgentMessages,
+        missingPod,
+        upcomingPickups,
+        upcomingDeliveries,
+        overdueTasks,
+        expiringCarriers,
+        expiringDrivers,
+        overdueInvoices: overdueInvoices.slice(0, 5),
+      },
+      upcoming: {
+        pickups: loads.filter((l) => l.pickupDate && l.pickupDate >= today.start && l.pickupDate < today.start + 7 * DAY).sort((a, b) => (a.pickupDate ?? 0) - (b.pickupDate ?? 0)).slice(0, 10),
+        deliveries: loads.filter((l) => l.deliveryDate && l.deliveryDate >= today.start && l.deliveryDate < today.start + 7 * DAY).sort((a, b) => (a.deliveryDate ?? 0) - (b.deliveryDate ?? 0)).slice(0, 10),
+      },
+      dailySummaryText,
+      demoMode: settings?.demoMode ?? false,
+      empty: loads.length === 0 && carriers.length === 0 && leads.length === 0 && trucks.length === 0,
+    };
+  },
+});
