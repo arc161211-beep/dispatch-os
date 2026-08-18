@@ -67,9 +67,8 @@ export function ImportCsvDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  type ImportFn = (args: { rows: Record<string, unknown>[] }) => Promise<{ inserted: number; errors: { row: number; error: string }[] }>;
-  const apiMod = (api as Record<string, Record<string, unknown>>)[entity] as Record<string, unknown>;
-  const runImport = useMutation(apiMod[mutationName] as unknown as ImportFn);
+  const apiMod = (api as any)[entity];
+  const runImport = useMutation(apiMod?.[mutationName] as any);
 
   const handleFile = (file: File) => {
     const reader = new FileReader();

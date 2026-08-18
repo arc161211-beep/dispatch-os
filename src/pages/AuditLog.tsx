@@ -7,8 +7,6 @@ import { ScrollText } from "lucide-react";
 import { fmtDateTime } from "@/lib/dates";
 import { useTimezone } from "@/hooks/use-app";
 
-type LogEntry = NonNullable<ReturnType<typeof useQuery<typeof api.auditlog.list>>[number]>;
-
 export default function AuditLog() {
   const tz = useTimezone();
   const [actionFilter, setActionFilter] = useState("");
