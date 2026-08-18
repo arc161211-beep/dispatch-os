@@ -26,7 +26,7 @@ const MAP: Record<string, string> = {
   Draft: GRAY, Offered: BLUE, "Under Review": PURPLE, Negotiating: PURPLE, "Awaiting Confirmation": AMBER,
   "Driver Notified": BLUE, "POD Pending": AMBER, Completed: GREEN, Cancelled: RED, "TONU Requested": AMBER, Disputed: RED,
   // Invoices
-  Sent: BLUE, Viewed: PURPLE, "Partially Paid": AMBER, Paid: GREEN, Overdue: RED, Disputed: RED,
+  Sent: BLUE, Viewed: PURPLE, "Partially Paid": AMBER, Paid: GREEN, Overdue: RED,
   // Messages
   unread: BLUE, read: GRAY, needs_reply: AMBER, waiting: PURPLE, resolved: GREEN, archived: GRAY,
   // Priorities

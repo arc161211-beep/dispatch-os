@@ -16,7 +16,7 @@ import { nextAction } from "@/lib/status";
 import { fmtDate, fmtRelative } from "@/lib/dates";
 import { useTimezone } from "@/hooks/use-app";
 
-type Lead = NonNullable<ReturnType<typeof useQuery<typeof api.leads.list>>[number]>;
+type Lead = any;
 
 export default function Leads() {
   const navigate = useNavigate();
@@ -219,7 +219,7 @@ function LeadFormDialog({ lead, onClose }: { lead: Lead | null; onClose: () => v
       usdot: String(fd.get("usdot") ?? "") || undefined,
       fleetSize: fd.get("fleetSize") ? Number(fd.get("fleetSize")) : undefined,
       equipment: String(fd.get("equipment") ?? "").split(",").map((s) => s.trim()).filter(Boolean),
-      source: (fd.get("source") as string) || "Manual",
+      source: ((fd.get("source") as string) || "Manual") as typeof LEAD_SOURCES[number],
       notes: String(fd.get("notes") ?? "") || undefined,
     };
     try {

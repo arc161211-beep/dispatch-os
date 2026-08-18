@@ -16,7 +16,7 @@ import { nextAction } from "@/lib/status";
 import { fmtDate } from "@/lib/dates";
 import { useTimezone } from "@/hooks/use-app";
 
-type Carrier = NonNullable<ReturnType<typeof useQuery<typeof api.carriers.list>>[number]>;
+type Carrier = any;
 
 export default function Carriers() {
   const navigate = useNavigate();
@@ -215,7 +215,7 @@ export function CarrierFormDialog({ carrier, onClose, defaultStatus }: { carrier
       preferredLanes: String(fd.get("preferredLanes") ?? "").split(",").map((s) => s.trim()).filter(Boolean),
       avoidedLanes: String(fd.get("avoidedLanes") ?? "").split(",").map((s) => s.trim()).filter(Boolean),
       homeTime: String(fd.get("homeTime") ?? "") || undefined,
-      feeType: feeType === "flat" ? "flat" : "percentage",
+      feeType: (feeType === "flat" ? "flat" : "percentage") as "flat" | "percentage",
       feeRatePercent: feeType !== "flat" && fd.get("feeRatePercent") ? Number(fd.get("feeRatePercent")) : undefined,
       feeMinCents: feeType !== "flat" && fd.get("feeMinCents") ? Math.round(Number(fd.get("feeMinCents")) * 100) : undefined,
       feeMaxCents: feeType !== "flat" && fd.get("feeMaxCents") ? Math.round(Number(fd.get("feeMaxCents")) * 100) : undefined,
