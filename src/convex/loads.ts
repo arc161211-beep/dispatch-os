@@ -463,33 +463,43 @@ export const setStatus = mutation({
     await syncResources(ctx, load, args.status);
 
     // Completion: calculate final fee + generate the dispatcher invoice.
+    // IDEMPOTENT: Check if an invoice already exists for this load to prevent duplicates.
     if (args.status === "Completed") {
-      const settings = await getSettings(ctx, s.orgId);
-      const invoiceNumber = await nextInvoiceNumber(ctx, s.orgId);
-      const amountCents = load.feeCents ?? 0;
-      await ctx.db.insert("invoices", {
-        orgId: s.orgId as never,
-        invoiceNumber,
-        carrierId: load.carrierId,
-        loadId: args.id,
-        status: "Draft",
-        issueDate: Date.now(),
-        dueDate: Date.now() + 14 * 864e5,
-        amountCents,
-        paidCents: 0,
-        notes: `Dispatcher fee for ${load.loadNumber}`,
-      });
-      await audit(ctx, s, { action: "invoice.created", entity: "invoice", metadata: { invoiceNumber, loadId: args.id, amountCents, fromLoadCompletion: true } });
-      if (load.carrierId) {
-        const carrier = await ctx.db.get(load.carrierId);
-        await ctx.db.insert("notifications", {
+      const existingInvoice = await ctx.db
+        .query("invoices")
+        .withIndex("by_org", (q) => q.eq("orgId", s.orgId))
+        .collect()
+        .then((all) => all.find((i) => i.loadId === args.id));
+
+      if (!existingInvoice) {
+        const invoiceNumber = await nextInvoiceNumber(ctx, s.orgId);
+        const amountCents = load.feeCents ?? 0;
+        await ctx.db.insert("invoices", {
           orgId: s.orgId as never,
-          userId: s.userId as never,
-          title: `Load ${load.loadNumber} completed`,
-          body: `Invoice ${invoiceNumber} ($${(amountCents / 100).toFixed(2)}) created for ${carrier?.companyName ?? "carrier"}.`,
-          link: "/finance",
-          type: "load",
+          invoiceNumber,
+          carrierId: load.carrierId,
+          loadId: args.id,
+          status: "Draft",
+          issueDate: Date.now(),
+          dueDate: Date.now() + 14 * 864e5,
+          amountCents,
+          paidCents: 0,
+          notes: `Dispatcher fee for ${load.loadNumber}`,
         });
+        await audit(ctx, s, { action: "invoice.created", entity: "invoice", metadata: { invoiceNumber, loadId: args.id, amountCents, fromLoadCompletion: true } });
+        if (load.carrierId) {
+          const carrier = await ctx.db.get(load.carrierId);
+          await ctx.db.insert("notifications", {
+            orgId: s.orgId as never,
+            userId: s.userId as never,
+            title: `Load ${load.loadNumber} completed`,
+            body: `Invoice ${invoiceNumber} ($${(amountCents / 100).toFixed(2)}) created for ${carrier?.companyName ?? "carrier"}.`,
+            link: "/finance",
+            type: "load",
+          });
+        }
+      } else {
+        await audit(ctx, s, { action: "invoice.duplicate_prevented", entity: "invoice", metadata: { loadId: args.id, existingInvoiceId: existingInvoice._id } });
       }
     }
 

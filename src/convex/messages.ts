@@ -14,17 +14,20 @@ export const listConversations = query({
   handler: async (ctx, args) => {
     const s = await requireOrg(ctx);
     const scope = loadScope(s);
-    let convos = await ctx.db.query("conversations").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).collect();
+    let convos = await ctx.db.query("conversations").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).take(200);
     if (scope.carrierId) convos = convos.filter((c) => !(c.entityType === "carrier" && c.entityId !== scope.carrierId) && c.entityType !== "driver");
     if (scope.driverId) convos = convos.filter((c) => c.entityType === "driver" && c.entityId === scope.driverId);
     if (args.status) convos = convos.filter((c) => c.status === args.status);
 
-    const messages = await ctx.db.query("messages").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).collect();
-    const enriched = convos.map((c) => {
-      const msgs = messages.filter((m) => m.conversationId === c._id);
-      const last = msgs.sort((a, b) => b._creationTime - a._creationTime)[0];
-      const unread = msgs.filter((m) => m.status === "unread" || m.status === "needs_reply").length;
-      const urgent = msgs.filter((m) => m.priority === "urgent" && (m.status === "unread" || m.status === "needs_reply")).length;
+    // Per-conversation: fetch only recent messages (bounded) for unread/last message
+    const enriched = await Promise.all(convos.map(async (c) => {
+      const recentMsgs = await ctx.db.query("messages")
+        .withIndex("by_conversation", (q) => q.eq("conversationId", c._id))
+        .order("desc")
+        .take(20); // Only need recent messages for unread count + last message
+      const last = recentMsgs[0];
+      const unread = recentMsgs.filter((m) => m.status === "unread" || m.status === "needs_reply").length;
+      const urgent = recentMsgs.filter((m) => m.priority === "urgent" && (m.status === "unread" || m.status === "needs_reply")).length;
       return {
         ...c,
         lastMessageAt: last?._creationTime ?? c.lastMessageAt ?? c._creationTime,
@@ -32,9 +35,9 @@ export const listConversations = query({
         lastMessageStatus: last?.status ?? null,
         unread,
         urgent,
-        messageCount: msgs.length,
+        messageCount: recentMsgs.length,
       };
-    });
+    }));
     enriched.sort((a, b) => (b.lastMessageAt ?? 0) - (a.lastMessageAt ?? 0));
     return enriched.slice(0, args.limit ?? 200);
   },
@@ -57,7 +60,8 @@ export const unreadStats = query({
   args: {},
   handler: async (ctx) => {
     const s = await requireOrg(ctx);
-    const messages = await ctx.db.query("messages").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).collect();
+    // Bounded: scan at most 500 messages for unread stats
+    const messages = await ctx.db.query("messages").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).take(500);
     return {
       unread: messages.filter((m) => m.status === "unread" || m.status === "needs_reply").length,
       urgent: messages.filter((m) => m.priority === "urgent" && (m.status === "unread" || m.status === "needs_reply")).length,
@@ -179,7 +183,7 @@ export const markConversationRead = mutation({
     const s = await requireOrg(ctx);
     const convo = await ctx.db.get(args.conversationId);
     if (!convo || convo.orgId !== s.orgId) throw new ConvexError("Conversation not found.");
-    const msgs = await ctx.db.query("messages").withIndex("by_conversation", (q) => q.eq("conversationId", args.conversationId)).collect();
+    const msgs = await ctx.db.query("messages").withIndex("by_conversation", (q) => q.eq("conversationId", args.conversationId)).take(500);
     for (const m of msgs) {
       if (m.status === "unread") await ctx.db.patch(m._id, { status: "read" });
     }

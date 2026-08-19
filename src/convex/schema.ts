@@ -94,8 +94,13 @@ const schema = defineSchema(
       orgId,
       role: v.union(...ROLES.map((r) => v.literal(r))),
       invitedBy: userId,
+      carrierId: v.optional(v.id("carriers")),
+      driverId: v.optional(v.id("drivers")),
+      name: v.optional(v.string()),
+      phone: v.optional(v.string()),
       status: v.union(v.literal("pending"), v.literal("accepted"), v.literal("revoked")),
       createdAt: v.number(),
+      expiresAt: v.number(),
     }).index("by_email", ["email"]).index("by_org", ["orgId"]),
 
     leads: defineTable({
@@ -341,11 +346,16 @@ const schema = defineSchema(
       uploadedBy: userId,
       uploadedByName: v.optional(v.string()),
       notes: v.optional(v.string()),
+      version: v.optional(v.number()),
+      previousVersionId: v.optional(v.id("documents")),
+      expiresAt: v.optional(v.number()),
+      status: v.optional(v.union(v.literal("active"), v.literal("expiring"), v.literal("expired"), v.literal("superseded"))),
       demo: v.optional(v.boolean()),
     })
       .index("by_org", ["orgId"])
       .index("by_org_entity", ["orgId", "entityType", "entityId"])
-      .index("by_org_type", ["orgId", "type"]),
+      .index("by_org_type", ["orgId", "type"])
+      .index("by_org_expires", ["orgId", "expiresAt"]),
 
     conversations: defineTable({
       orgId,

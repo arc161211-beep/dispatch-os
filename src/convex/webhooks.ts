@@ -12,7 +12,8 @@ export const list = query({
 
 /**
  * Record an incoming webhook. Signature verification happens in the HTTP
- * handler before this is called (see http.ts). Duplicate protection: an
+ * handler (http.ts) before this is called. The `verified` flag reflects
+ * whether HMAC-SHA256 validation passed. Duplicate protection: an
  * externalId already processed is ignored.
  */
 export const logWebhook = mutation({
@@ -21,6 +22,7 @@ export const logWebhook = mutation({
     eventType: v.optional(v.string()),
     externalId: v.optional(v.string()),
     payloadMeta: v.optional(v.any()),
+    verified: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const s = await requireOrg(ctx);
@@ -38,10 +40,10 @@ export const logWebhook = mutation({
       eventType: args.eventType,
       externalId: args.externalId,
       payloadMeta: args.payloadMeta ? JSON.parse(JSON.stringify(args.payloadMeta).slice(0, 4000)) : undefined,
-      status: args.externalId ? "processed" : "unverified",
+      status: args.verified ? "processed" : "unverified",
       retryCount: 0,
       receivedAt: Date.now(),
-      processedAt: Date.now(),
+      processedAt: args.verified ? Date.now() : undefined,
     });
     return { duplicated: false };
   },

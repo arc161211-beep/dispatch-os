@@ -2,6 +2,9 @@ import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { loadScope, requireOrg } from "./lib/context";
 
+/** Max records to scan per entity type before stopping. */
+const SCAN_LIMIT = 100;
+
 export const globalSearch = query({
   args: { term: v.string(), limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
@@ -13,56 +16,54 @@ export const globalSearch = query({
 
     const results: { type: string; label: string; sub: string; id: string; route: string }[] = [];
 
-    const carriers = (await ctx.db.query("carriers").withIndex("by_org", (q2) => q2.eq("orgId", s.orgId)).collect()).filter((c) =>
-      scope.carrierId ? c._id === scope.carrierId : true,
-    );
+    // Early termination: stop scanning each entity once we have enough results
+    const carriers = await ctx.db.query("carriers").withIndex("by_org", (q2) => q2.eq("orgId", s.orgId)).take(SCAN_LIMIT);
     for (const c of carriers) {
+      if (scope.carrierId && c._id !== scope.carrierId) continue;
       if (c.companyName.toLowerCase().includes(q) || (c.mcNumber ?? "").toLowerCase().includes(q)) {
         results.push({ type: "Carrier", label: c.companyName, sub: [c.mcNumber, c.status].filter(Boolean).join(" · "), id: c._id, route: `/carriers/${c._id}` });
-        if (results.length >= limit) break;
+        if (results.length >= limit) return results;
       }
     }
 
-    const trucks = (await ctx.db.query("trucks").withIndex("by_org", (q2) => q2.eq("orgId", s.orgId)).collect()).filter((t) =>
-      scope.carrierId ? t.carrierId === scope.carrierId : true,
-    );
+    const trucks = await ctx.db.query("trucks").withIndex("by_org", (q2) => q2.eq("orgId", s.orgId)).take(SCAN_LIMIT);
     for (const t of trucks) {
+      if (scope.carrierId && t.carrierId !== scope.carrierId) continue;
       if (t.unitNumber.toLowerCase().includes(q) || (t.vin ?? "").toLowerCase().includes(q)) {
         results.push({ type: "Truck", label: `${t.unitNumber} (${t.type ?? "truck"})`, sub: `${t.currentLocation ?? "no location"} · ${t.availability}`, id: t._id, route: "/trucks" });
-        if (results.length >= limit) break;
+        if (results.length >= limit) return results;
       }
     }
 
-    const drivers = (await ctx.db.query("drivers").withIndex("by_org", (q2) => q2.eq("orgId", s.orgId)).collect()).filter((d) =>
-      scope.carrierId ? d.carrierId === scope.carrierId : true,
-    );
+    const drivers = await ctx.db.query("drivers").withIndex("by_org", (q2) => q2.eq("orgId", s.orgId)).take(SCAN_LIMIT);
     for (const d of drivers) {
+      if (scope.carrierId && d.carrierId !== scope.carrierId) continue;
       if (d.name.toLowerCase().includes(q) || (d.phone ?? "").includes(q)) {
         results.push({ type: "Driver", label: d.name, sub: `${d.availability}`, id: d._id, route: "/drivers" });
-        if (results.length >= limit) break;
+        if (results.length >= limit) return results;
       }
     }
 
-    const brokers = await ctx.db.query("brokers").withIndex("by_org", (q2) => q2.eq("orgId", s.orgId)).collect();
+    const brokers = await ctx.db.query("brokers").withIndex("by_org", (q2) => q2.eq("orgId", s.orgId)).take(SCAN_LIMIT);
     for (const b of brokers) {
       if (b.company.toLowerCase().includes(q) || (b.mc ?? "").toLowerCase().includes(q)) {
         results.push({ type: "Broker", label: b.company, sub: [b.mc, b.status].filter(Boolean).join(" · "), id: b._id, route: "/brokers" });
-        if (results.length >= limit) break;
+        if (results.length >= limit) return results;
       }
     }
 
-    const leads = await ctx.db.query("leads").withIndex("by_org", (q2) => q2.eq("orgId", s.orgId)).collect();
+    const leads = await ctx.db.query("leads").withIndex("by_org", (q2) => q2.eq("orgId", s.orgId)).take(SCAN_LIMIT);
     for (const l of leads) {
       if (l.companyName.toLowerCase().includes(q) || (l.contactName ?? "").toLowerCase().includes(q)) {
         results.push({ type: "Lead", label: l.companyName, sub: `${l.status}`, id: l._id, route: "/leads" });
-        if (results.length >= limit) break;
+        if (results.length >= limit) return results;
       }
     }
 
-    const loads = (await ctx.db.query("loads").withIndex("by_org", (q2) => q2.eq("orgId", s.orgId)).collect()).filter((l) =>
-      scope.driverId ? l.driverId === scope.driverId : scope.carrierId ? l.carrierId === scope.carrierId : true,
-    );
+    const loads = await ctx.db.query("loads").withIndex("by_org", (q2) => q2.eq("orgId", s.orgId)).take(SCAN_LIMIT);
     for (const l of loads) {
+      if (scope.driverId && l.driverId !== scope.driverId) continue;
+      if (scope.carrierId && l.carrierId !== scope.carrierId) continue;
       if (
         l.loadNumber.toLowerCase().includes(q) ||
         (l.origin ?? "").toLowerCase().includes(q) ||
@@ -70,26 +71,25 @@ export const globalSearch = query({
         (l.externalId ?? "").toLowerCase().includes(q)
       ) {
         results.push({ type: "Load", label: l.loadNumber, sub: `${l.origin ?? "?"} → ${l.destination ?? "?"} · ${l.status}`, id: l._id, route: `/loads/${l._id}` });
-        if (results.length >= limit) break;
+        if (results.length >= limit) return results;
       }
     }
 
-    const invoices = (await ctx.db.query("invoices").withIndex("by_org", (q2) => q2.eq("orgId", s.orgId)).collect()).filter((i) =>
-      scope.carrierId ? i.carrierId === scope.carrierId : true,
-    );
+    const invoices = await ctx.db.query("invoices").withIndex("by_org", (q2) => q2.eq("orgId", s.orgId)).take(SCAN_LIMIT);
     for (const i of invoices) {
+      if (scope.carrierId && i.carrierId !== scope.carrierId) continue;
       if (i.invoiceNumber.toLowerCase().includes(q)) {
         results.push({ type: "Invoice", label: i.invoiceNumber, sub: `$${(i.amountCents / 100).toFixed(2)} · ${i.status}`, id: i._id, route: "/finance" });
-        if (results.length >= limit) break;
+        if (results.length >= limit) return results;
       }
     }
 
     if (results.length < limit) {
-      const msgs = await ctx.db.query("messages").withIndex("by_org", (q2) => q2.eq("orgId", s.orgId)).collect();
+      const msgs = await ctx.db.query("messages").withIndex("by_org", (q2) => q2.eq("orgId", s.orgId)).take(SCAN_LIMIT);
       for (const m of msgs) {
         if (m.body.toLowerCase().includes(q)) {
           results.push({ type: "Message", label: m.body.slice(0, 60), sub: `${m.direction} · ${m.status}`, id: m._id, route: "/messages" });
-          if (results.length >= limit) break;
+          if (results.length >= limit) return results;
         }
       }
     }

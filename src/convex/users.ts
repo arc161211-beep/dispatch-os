@@ -7,6 +7,9 @@ import { requireAdmin, requireOrg } from "./lib/context";
 import { validEmail } from "./lib/validation";
 import { ACCOUNT_STATUSES, ROLES, Role } from "./constants";
 
+/** Invitation token expiry: 7 days */
+const INVITE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
+
 /**
  * Get the current signed in user. Returns null if the user is not signed in.
  */
@@ -27,12 +30,12 @@ export const getCurrentUser = async (ctx: QueryCtx) => {
 /**
  * One-time workspace provisioning. Called by the app shell after sign-in.
  * - If a pending invite exists for this email, the user joins that org with
- *   the invited role.
+ *   the invited role, carrier assignment, and name/phone.
  * - Otherwise a brand-new organization is created and the user becomes ADMIN.
  * Safe to call repeatedly — it is a no-op once the user has an org.
  *
  * SECURITY: Only allows provisioning if:
- * 1. User has a matching pending invite, OR
+ * 1. User has a matching pending invite (not expired/revoked), OR
  * 2. This is genuinely a brand-new workspace (no other users exist yet)
  */
 export const provision = mutation({
@@ -54,12 +57,20 @@ export const provision = mutation({
         .withIndex("by_email", (q) => q.eq("email", email))
         .first();
       if (pending && pending.status === "pending") {
+        // Check if invitation has expired
+        if (pending.expiresAt && pending.expiresAt < Date.now()) {
+          throw new ConvexError("This invitation has expired. Please ask an administrator to send a new one.");
+        }
+
         const orgId: Id<"organizations"> = pending.orgId;
         await ctx.db.patch(pending._id, { status: "accepted" });
         await ctx.db.patch(userId, {
           orgId,
           role: pending.role as Role,
-          name: user.name ?? pending.email,
+          name: user.name ?? pending.name ?? pending.email,
+          phone: pending.phone,
+          carrierId: pending.carrierId as Id<"carriers"> | undefined,
+          driverId: pending.driverId as Id<"drivers"> | undefined,
           accountStatus: "active",
         });
         await audit(ctx, null, {
@@ -69,7 +80,7 @@ export const provision = mutation({
           action: "user.invite.accepted",
           entity: "user",
           entityId: userId,
-          metadata: { email, role: pending.role },
+          metadata: { email, role: pending.role, carrierId: pending.carrierId },
         });
         return { status: "ready" as const, inviteAccepted: true };
       }
@@ -165,21 +176,27 @@ export const getOrgUsers = query({
       pending: pending.map((p) => ({
         _id: p._id,
         email: p.email,
+        name: p.name ?? "",
+        phone: p.phone ?? "",
         role: p.role as Role,
+        carrierId: p.carrierId ?? undefined,
         status: p.status,
         createdAt: p.createdAt,
+        expiresAt: p.expiresAt,
+        isExpired: p.expiresAt < Date.now(),
       })),
     };
   },
 });
 
-/** Admin creates a user directly (sets up their account status for login). */
+/** Admin creates a user directly (creates pending invite with carrier/driver assignment). */
 export const createUser = mutation({
   args: {
     email: v.string(),
     name: v.string(),
     role: v.union(...ROLES.map((r) => v.literal(r))),
     carrierId: v.optional(v.id("carriers")),
+    driverId: v.optional(v.id("drivers")),
     phone: v.optional(v.string()),
     title: v.optional(v.string()),
   },
@@ -198,18 +215,26 @@ export const createUser = mutation({
       throw new ConvexError("An invitation for this email already exists.");
     }
 
-    // Create pending user entry
+    // Validate carrier exists if provided
+    if (args.carrierId) {
+      const carrier = await ctx.db.get(args.carrierId);
+      if (!carrier || carrier.orgId !== s.orgId) throw new ConvexError("Carrier not found.");
+    }
+
     const id = await ctx.db.insert("pendingUsers", {
       email,
       orgId: s.orgId as never,
       role: args.role,
       invitedBy: s.userId as never,
+      carrierId: args.carrierId as Id<"carriers"> | undefined,
+      driverId: args.driverId as Id<"drivers"> | undefined,
+      name: args.name.trim(),
+      phone: args.phone,
       status: "pending",
       createdAt: Date.now(),
+      expiresAt: Date.now() + INVITE_EXPIRY_MS,
     });
 
-    // If carrier_id specified, update the pending invite metadata
-    // The actual user record gets created when they accept the invite
     await audit(ctx, s, {
       action: "user.created",
       entity: "user",
@@ -227,38 +252,57 @@ export const createUser = mutation({
   },
 });
 
-/** Admin invites a user by email. */
+/** Admin invites a user by email. Stores carrierId, name, phone for provisioning. */
 export const inviteUser = mutation({
   args: {
     email: v.string(),
     role: v.union(...ROLES.map((r) => v.literal(r))),
     name: v.optional(v.string()),
     carrierId: v.optional(v.id("carriers")),
+    driverId: v.optional(v.id("drivers")),
     phone: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const s = await requireAdmin(ctx);
     const email = validEmail(args.email);
     if (!email) throw new ConvexError("A valid email is required.");
+
+    // Check for existing invite (pending or accepted)
     const existing = await ctx.db
       .query("pendingUsers")
       .withIndex("by_email", (q) => q.eq("email", email))
       .first();
-    if (existing) throw new ConvexError("An invitation for this email already exists.");
+    if (existing && existing.status === "pending" && existing.expiresAt > Date.now()) {
+      throw new ConvexError("An active invitation for this email already exists.");
+    }
+
+    // Validate carrier exists if provided
+    if (args.carrierId) {
+      const carrier = await ctx.db.get(args.carrierId);
+      if (!carrier || carrier.orgId !== s.orgId) throw new ConvexError("Carrier not found.");
+    }
+
     const id = await ctx.db.insert("pendingUsers", {
       email,
       orgId: s.orgId as never,
       role: args.role,
       invitedBy: s.userId as never,
+      carrierId: args.carrierId as Id<"carriers"> | undefined,
+      driverId: args.driverId as Id<"drivers"> | undefined,
+      name: args.name,
+      phone: args.phone,
       status: "pending",
       createdAt: Date.now(),
+      expiresAt: Date.now() + INVITE_EXPIRY_MS,
     });
+
     await audit(ctx, s, {
       action: "user.invited",
       entity: "user",
       entityId: id,
-      metadata: { email, role: args.role, name: args.name, carrierId: args.carrierId },
+      metadata: { email, role: args.role, name: args.name, carrierId: args.carrierId, driverId: args.driverId },
     });
+
     return { id };
   },
 });

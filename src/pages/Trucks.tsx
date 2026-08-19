@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
@@ -11,7 +11,7 @@ import { PageHeader, StatusBadge, NextActionPill, LoadingState, EmptyState, erro
 import { Field, Grid, SelectInput, TextArea, TextInput } from "@/components/app/forms";
 import { ResponsiveTable, type Column } from "@/components/app/ResponsiveTable";
 import { ImportCsvDialog, ExportCsvButton } from "@/components/app/ImportExport";
-import { Search, Truck, Plus } from "lucide-react";
+import { Search, Truck, Plus, ExternalLink } from "lucide-react";
 import { nextAction } from "@/lib/status";
 import { useQuery as useConvexQuery } from "convex/react";
 
@@ -19,6 +19,7 @@ type TruckType = Record<string, any> & { _id: string; unitNumber: string; type?:
 
 export default function Trucks() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const canWrite = useCanWrite();
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -50,6 +51,9 @@ export default function Trucks() {
     { key: "next", header: "Next action", hideOnMobile: true, render: (t) => <NextActionPill action={nextAction("truck", t as any)} /> },
     ...(canWrite ? [{ key: "actions" as const, header: "", hideOnMobile: true, render: (t: TruckType) => (
       <div className="flex justify-end gap-1">
+        <Link to={`/trucks/${t._id}`} onClick={(e) => e.stopPropagation()} className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-muted transition-colors" title="View details">
+          <ExternalLink className="size-4 text-muted-foreground" />
+        </Link>
         <SelectInput value={t.availability} onChange={(e) => handleAvail(t, e.target.value)} className="h-8 w-32 text-xs" onClick={(e) => e.stopPropagation()}>
           {TRUCK_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
         </SelectInput>
@@ -77,7 +81,7 @@ export default function Trucks() {
         </SelectInput>
       </div>
       {trucks === undefined ? <LoadingState /> : (
-        <ResponsiveTable columns={columns} rows={trucks} getKey={(t) => t._id} onRowClick={canWrite ? (t) => setDialog(t) : undefined}
+        <ResponsiveTable columns={columns} rows={trucks} getKey={(t) => t._id} onRowClick={canWrite ? (t) => setDialog(t) : (t) => navigate(`/trucks/${t._id}`)}
           empty={<EmptyState icon={<Truck className="size-6" />} title="No trucks yet" description="Add your first truck or import a CSV." action={canWrite ? <Button size="sm" onClick={() => setDialog("create")}><Plus className="size-3.5" /> New truck</Button> : undefined} />} />
       )}
       {dialog && <TruckFormDialog truck={dialog === "create" ? null : dialog} carriers={carriers ?? []} onClose={() => setDialog(null)} />}

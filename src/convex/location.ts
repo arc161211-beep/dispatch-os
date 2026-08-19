@@ -70,7 +70,7 @@ export const getLatest = query({
   },
 });
 
-/** Get location history for a truck or driver. */
+/** Get location history for a truck or driver. Uses indexed query efficiently. */
 export const getHistory = query({
   args: {
     entityType: v.union(v.literal("truck"), v.literal("driver")),
@@ -99,7 +99,9 @@ export const getHistory = query({
   },
 });
 
-/** Get all truck locations for the map view. */
+/** Get all truck locations for the map view.
+ *  FIX: Now queries the latest location from locationHistory per truck
+ *  instead of using truck._creationTime. */
 export const getTruckLocations = query({
   args: {
     carrierId: v.optional(v.id("carriers")),
@@ -131,12 +133,24 @@ export const getTruckLocations = query({
       lat: number;
       lon: number;
       location: string | undefined;
+      locationSource: string | undefined;
+      locationAccuracy: number | undefined;
       at: number;
       driverName?: string;
+      isLive: boolean;
     }[] = [];
 
     for (const truck of trucks) {
       if (truck.lat === undefined || truck.lon === undefined) continue;
+
+      // Query the latest location from locationHistory (correct timestamp)
+      const latestLocation = await ctx.db
+        .query("locationHistory")
+        .withIndex("by_org_entity", (q) =>
+          q.eq("orgId", s.orgId).eq("entityType", "truck").eq("entityId", truck._id),
+        )
+        .order("desc")
+        .first();
 
       // Find the driver assigned to this truck
       let driverName: string | undefined;
@@ -148,17 +162,25 @@ export const getTruckLocations = query({
         }
       }
 
+      const locationTime = latestLocation?.at ?? truck._creationTime;
+      const age = Date.now() - locationTime;
+      // Consider "live" if updated within the last 15 minutes
+      const isLive = age < 15 * 60 * 1000;
+
       results.push({
         truckId: truck._id,
         unitNumber: truck.unitNumber,
         type: truck.type,
         carrierId: truck.carrierId,
         availability: truck.availability,
-        lat: truck.lat,
-        lon: truck.lon,
-        location: truck.currentLocation,
-        at: truck._creationTime,
+        lat: latestLocation?.lat ?? truck.lat,
+        lon: latestLocation?.lon ?? truck.lon,
+        location: latestLocation?.location ?? truck.currentLocation,
+        locationSource: latestLocation?.source,
+        locationAccuracy: latestLocation?.accuracy,
+        at: locationTime,
         driverName,
+        isLive,
       });
     }
 
@@ -336,5 +358,35 @@ export const bulkUpdateLocations = mutation({
     });
 
     return { updated };
+  },
+});
+
+/** Clean up old location history based on retention settings.
+ *  Safe: only deletes locationHistory, never financial or audit data. */
+export const cleanupOldLocations = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const s = await requireWrite(ctx);
+    const settings = await ctx.db
+      .query("settings")
+      .withIndex("by_org", (q) => q.eq("orgId", s.orgId))
+      .first();
+    const days = settings?.dataRetention?.locationHistoryDays;
+    if (!days || days <= 0) return { deleted: 0, message: "No retention policy configured." };
+
+    const cutoff = Date.now() - days * 86_400_000;
+    const old = await ctx.db
+      .query("locationHistory")
+      .withIndex("by_org", (q) => q.eq("orgId", s.orgId))
+      .filter((q) => q.lt(q.field("at"), cutoff))
+      .take(500); // batch size
+
+    let deleted = 0;
+    for (const row of old) {
+      await ctx.db.delete(row._id);
+      deleted++;
+    }
+
+    return { deleted, message: `Deleted ${deleted} records older than ${days} days.` };
   },
 });

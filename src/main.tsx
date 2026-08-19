@@ -21,7 +21,9 @@ const Leads = lazy(() => import("./pages/Leads.tsx"));
 const Carriers = lazy(() => import("./pages/Carriers.tsx"));
 const CarrierDetail = lazy(() => import("./pages/CarrierDetail.tsx"));
 const Trucks = lazy(() => import("./pages/Trucks.tsx"));
+const TruckDetail = lazy(() => import("./pages/TruckDetail.tsx"));
 const Drivers = lazy(() => import("./pages/Drivers.tsx"));
+const DriverDetail = lazy(() => import("./pages/DriverDetail.tsx"));
 const Brokers = lazy(() => import("./pages/Brokers.tsx"));
 const Shippers = lazy(() => import("./pages/Shippers.tsx"));
 const Loads = lazy(() => import("./pages/Loads.tsx"));
@@ -162,7 +164,9 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/carriers" element={<Protected><Carriers /></Protected>} />
                 <Route path="/carriers/:id" element={<Protected><CarrierDetail /></Protected>} />
                 <Route path="/trucks" element={<Protected><Trucks /></Protected>} />
+                <Route path="/trucks/:id" element={<Protected><TruckDetail /></Protected>} />
                 <Route path="/drivers" element={<Protected><Drivers /></Protected>} />
+                <Route path="/drivers/:id" element={<Protected><DriverDetail /></Protected>} />
                 <Route path="/brokers" element={<Protected><Brokers /></Protected>} />
                 <Route path="/shippers" element={<Protected><Shippers /></Protected>} />
                 <Route path="/loads" element={<Protected><Loads /></Protected>} />

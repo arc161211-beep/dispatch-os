@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
@@ -11,7 +11,7 @@ import { PageHeader, StatusBadge, NextActionPill, LoadingState, EmptyState, erro
 import { Field, Grid, SelectInput, TextArea, TextInput } from "@/components/app/forms";
 import { ResponsiveTable, type Column } from "@/components/app/ResponsiveTable";
 import { ImportCsvDialog, ExportCsvButton } from "@/components/app/ImportExport";
-import { Search, UserRound, Plus } from "lucide-react";
+import { Search, UserRound, Plus, ExternalLink } from "lucide-react";
 import { nextAction } from "@/lib/status";
 import { fmtDate } from "@/lib/dates";
 import { useTimezone as useTz } from "@/hooks/use-app";
@@ -20,6 +20,7 @@ type DriverType = any;
 
 export default function Drivers() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const tz = useTz();
   const canWrite = useCanWrite();
   const [search, setSearch] = useState("");
@@ -52,6 +53,9 @@ export default function Drivers() {
     { key: "next", header: "Next action", hideOnMobile: true, render: (d) => <NextActionPill action={nextAction("driver", d)} /> },
     ...(canWrite ? [{ key: "actions" as const, header: "", hideOnMobile: true, render: (d: DriverType) => (
       <div className="flex justify-end gap-1">
+        <Link to={`/drivers/${d._id}`} onClick={(e) => e.stopPropagation()} className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-muted transition-colors" title="View details">
+          <ExternalLink className="size-4 text-muted-foreground" />
+        </Link>
         <SelectInput value={d.availability} onChange={(e) => handleAvail(d, e.target.value)} className="h-8 w-32 text-xs" onClick={(e) => e.stopPropagation()}>
           {DRIVER_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
         </SelectInput>
@@ -79,7 +83,7 @@ export default function Drivers() {
         </SelectInput>
       </div>
       {drivers === undefined ? <LoadingState /> : (
-        <ResponsiveTable columns={columns} rows={drivers} getKey={(d) => d._id} onRowClick={canWrite ? (d) => setDialog(d) : undefined}
+        <ResponsiveTable columns={columns} rows={drivers} getKey={(d) => d._id} onRowClick={canWrite ? (d) => setDialog(d) : (d) => navigate(`/drivers/${d._id}`)}
           empty={<EmptyState icon={<UserRound className="size-6" />} title="No drivers yet" description="Add your first driver or import a CSV." action={canWrite ? <Button size="sm" onClick={() => setDialog("create")}><Plus className="size-3.5" /> New driver</Button> : undefined} />} />
       )}
       {dialog && <DriverFormDialog driver={dialog === "create" ? null : dialog} carriers={carriers ?? []} onClose={() => setDialog(null)} />}

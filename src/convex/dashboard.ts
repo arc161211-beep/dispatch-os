@@ -11,6 +11,9 @@ function tzToday(tz: string, dayOffset = 0): { start: number; end: number } {
 }
 
 const DAY = 864e5;
+/** Maximum records to load per entity table for dashboard aggregation.
+ *  Bounds memory use regardless of org data volume. */
+const BOUNDED = 500;
 
 export const summary = query({
   args: {},
@@ -22,18 +25,33 @@ export const summary = query({
     const now = Date.now();
     const today = tzToday(tz);
 
-    const [carriers, trucks, drivers, loads, messages, invoices, tasks, documents, leads] = await Promise.all([
-      ctx.db.query("carriers").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).collect(),
-      ctx.db.query("trucks").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).collect(),
-      ctx.db.query("drivers").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).collect(),
-      ctx.db.query("loads").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).collect(),
-      ctx.db.query("messages").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).collect(),
-      ctx.db.query("invoices").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).collect(),
-      ctx.db.query("tasks").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).collect(),
-      ctx.db.query("documents").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).collect(),
-      ctx.db.query("leads").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).collect(),
+    // Bounded queries — never load entire org data into memory
+    const [carriers, trucks, drivers, loads, invoices, tasks, leads] = await Promise.all([
+      ctx.db.query("carriers").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).take(BOUNDED),
+      ctx.db.query("trucks").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).take(BOUNDED),
+      ctx.db.query("drivers").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).take(BOUNDED),
+      ctx.db.query("loads").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).take(BOUNDED),
+      ctx.db.query("invoices").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).take(BOUNDED),
+      ctx.db.query("tasks").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).take(BOUNDED),
+      ctx.db.query("leads").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).take(BOUNDED),
     ]);
 
+    // Fetch only urgent messages (bounded) — not all messages
+    const urgentMessages = (await ctx.db
+      .query("messages")
+      .withIndex("by_org", (q) => q.eq("orgId", s.orgId))
+      .take(BOUNDED))
+      .filter((m) => m.priority === "urgent" && ["unread", "needs_reply"].includes(m.status))
+      .sort((a, b) => b._creationTime - a._creationTime)
+      .slice(0, 5);
+
+    // All messages for counts (bounded)
+    const allMessages = (await ctx.db
+      .query("messages")
+      .withIndex("by_org", (q) => q.eq("orgId", s.orgId))
+      .take(BOUNDED));
+
+    // Scope by carrier/driver
     if (scope.carrierId) {
       const byCarrier = (l: { carrierId?: string }) => l.carrierId === scope.carrierId;
       loads.splice(0, loads.length, ...loads.filter(byCarrier));
@@ -61,19 +79,17 @@ export const summary = query({
     const outstandingFeesCents = invoices.filter((i) => !["Paid", "Cancelled"].includes(i.status)).reduce((sum, i) => sum + (i.amountCents - i.paidCents), 0);
     const paidFeesCents = invoices.reduce((sum, i) => sum + i.paidCents, 0);
 
-    // Attention items
-    const urgentMessages = messages
-      .filter((m) => m.priority === "urgent" && ["unread", "needs_reply"].includes(m.status))
-      .sort((a, b) => b._creationTime - a._creationTime)
-      .slice(0, 5);
-    const podStates = ["In Transit", "At Delivery", "Delivered", "POD Pending"];
-    const missingPod = loads
-      .filter((l) => podStates.includes(l.status))
-      .filter((l) => {
-        const pod = documents.some((d) => d.entityType === "load" && d.entityId === l._id && d.type === "POD");
-        return !pod;
-      })
-      .slice(0, 5);
+    // Attention items — only load documents for loads needing POD (bounded)
+    const podLoads = loads.filter((l) => ["In Transit", "At Delivery", "Delivered", "POD Pending"].includes(l.status)).slice(0, 20);
+    const missingPod: typeof loads = [];
+    for (const l of podLoads) {
+      const docs = await ctx.db.query("documents")
+        .withIndex("by_org_entity", (q) => q.eq("orgId", s.orgId).eq("entityType", "load").eq("entityId", l._id))
+        .take(10);
+      if (!docs.some((d) => d.type === "POD")) missingPod.push(l);
+      if (missingPod.length >= 5) break;
+    }
+
     const upcomingPickups = loads
       .filter((l) => !TERMINAL_LOAD_STATUSES.includes(l.status as LoadStatus) && l.pickupDate && l.pickupDate >= today.start && l.pickupDate <= today.start + 2 * DAY)
       .sort((a, b) => (a.pickupDate ?? 0) - (b.pickupDate ?? 0))
@@ -116,7 +132,7 @@ export const summary = query({
       }));
 
     // Client requests (urgent/needs_reply messages from carrier conversations)
-    const clientRequests = messages
+    const clientRequests = allMessages
       .filter((m) => ["urgent", "high"].includes(m.priority ?? "") && ["needs_reply", "unread"].includes(m.status))
       .sort((a, b) => b._creationTime - a._creationTime)
       .slice(0, 5);

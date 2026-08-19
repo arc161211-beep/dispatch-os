@@ -5,16 +5,52 @@ import { audit } from "./lib/audit";
 import { isAdminRole, loadScope, requireOrg, requireWrite } from "./lib/context";
 import { optString, validateFileMeta } from "./lib/validation";
 
+const EXPIRY_WARNING_DAYS = 30;
+
+/** Determine expiry status from expiresAt timestamp. */
+function expiryStatus(expiresAt?: number | null): "active" | "expiring" | "expired" | undefined {
+  if (!expiresAt) return undefined;
+  const now = Date.now();
+  if (expiresAt < now) return "expired";
+  if (expiresAt < now + EXPIRY_WARNING_DAYS * 86_400_000) return "expiring";
+  return "active";
+}
+
 export const list = query({
-  args: { entityType: v.optional(v.string()), entityId: v.optional(v.string()), type: v.optional(v.string()), limit: v.optional(v.number()) },
+  args: { entityType: v.optional(v.string()), entityId: v.optional(v.string()), type: v.optional(v.string()), status: v.optional(v.string()), limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
     const s = await requireOrg(ctx);
     let docs = await ctx.db.query("documents").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).collect();
     if (args.entityType) docs = docs.filter((d) => d.entityType === args.entityType);
     if (args.entityId) docs = docs.filter((d) => d.entityId === args.entityId);
     if (args.type) docs = docs.filter((d) => d.type === args.type);
+    if (args.status) docs = docs.filter((d) => (d.status ?? expiryStatus(d.expiresAt)) === args.status);
     docs.sort((a, b) => b._creationTime - a._creationTime);
-    return docs.slice(0, args.limit ?? 300);
+    return docs.slice(0, args.limit ?? 300).map((d) => ({
+      ...d,
+      computedStatus: d.status ?? expiryStatus(d.expiresAt),
+    }));
+  },
+});
+
+/** Get documents expiring soon across the organization. */
+export const expiringSoon = query({
+  args: { withinDays: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const s = await requireOrg(ctx);
+    const days = args.withinDays ?? 30;
+    const cutoff = Date.now() + days * 86_400_000;
+    const docs = await ctx.db
+      .query("documents")
+      .withIndex("by_org_expires", (q) => q.eq("orgId", s.orgId).lte("expiresAt", cutoff))
+      .collect();
+    return docs
+      .filter((d) => d.expiresAt && d.expiresAt > Date.now()) // not yet expired
+      .map((d) => ({
+        ...d,
+        computedStatus: expiryStatus(d.expiresAt),
+        daysUntilExpiry: d.expiresAt ? Math.ceil((d.expiresAt - Date.now()) / 86_400_000) : null,
+      }));
   },
 });
 
@@ -28,9 +64,7 @@ export const getUrl = query({
 });
 
 /**
- * Short-lived, unguessable upload URL. The client POSTs the raw file body to
- * this URL and receives { storageId }, then registers the document metadata
- * through documents.upload (which validates extension/size/ownership).
+ * Short-lived, unguessable upload URL.
  */
 export const generateUploadUrl = mutation({
   args: {},
@@ -41,10 +75,8 @@ export const generateUploadUrl = mutation({
 });
 
 /**
- * Register a completed upload. The file itself is uploaded through Convex
- * storage (authenticated, private). This mutation validates metadata and
- * records ownership. If validation fails the record is rejected and the UI
- * shows the error — an upload is never silently marked successful.
+ * Register a completed upload. Supports versioning: when replacing a document,
+ * pass previousVersionId to supersede the old version.
  */
 export const upload = mutation({
   args: {
@@ -56,6 +88,8 @@ export const upload = mutation({
     size: v.optional(v.number()),
     storageId: v.string(),
     notes: v.optional(v.string()),
+    expiresAt: v.optional(v.number()),
+    previousVersionId: v.optional(v.id("documents")),
   },
   handler: async (ctx, args) => {
     const s = await requireWrite(ctx);
@@ -66,6 +100,20 @@ export const upload = mutation({
         throw new ConvexError("Linked record not found in this workspace.");
       }
     }
+
+    // Determine version number
+    let version = 1;
+    if (args.previousVersionId) {
+      const prev = await ctx.db.get(args.previousVersionId);
+      if (prev && prev.orgId === s.orgId) {
+        version = ((prev as any).version ?? 0) + 1;
+        // Supersede the previous version
+        await ctx.db.patch(args.previousVersionId, { status: "superseded" } as any);
+      }
+    }
+
+    const computedStatus = expiryStatus(args.expiresAt);
+
     const id = await ctx.db.insert("documents", {
       orgId: s.orgId as never,
       entityType: args.entityType,
@@ -78,14 +126,18 @@ export const upload = mutation({
       uploadedBy: s.userId as never,
       uploadedByName: s.name,
       notes: optString(args.notes, 1000),
+      version,
+      previousVersionId: args.previousVersionId as any,
+      expiresAt: args.expiresAt,
+      status: computedStatus,
     });
     await audit(ctx, s, {
       action: "document.uploaded",
       entity: "document",
       entityId: id,
-      metadata: { type: args.type, entityType: args.entityType, entityId: args.entityId, fileName: meta.fileName },
+      metadata: { type: args.type, entityType: args.entityType, entityId: args.entityId, fileName: meta.fileName, version, expiresAt: args.expiresAt },
     });
-    return { id };
+    return { id, version };
   },
 });
 
