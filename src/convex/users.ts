@@ -3,13 +3,12 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query, QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { audit } from "./lib/audit";
-import { requireAdmin } from "./lib/context";
+import { requireAdmin, requireOrg } from "./lib/context";
 import { validEmail } from "./lib/validation";
-import { ROLES, Role } from "./constants";
+import { ACCOUNT_STATUSES, ROLES, Role } from "./constants";
 
 /**
  * Get the current signed in user. Returns null if the user is not signed in.
- * Usage: const signedInUser = await ctx.runQuery(api.authHelpers.currentUser);
  */
 export const currentUser = query({
   args: {},
@@ -31,6 +30,10 @@ export const getCurrentUser = async (ctx: QueryCtx) => {
  *   the invited role.
  * - Otherwise a brand-new organization is created and the user becomes ADMIN.
  * Safe to call repeatedly — it is a no-op once the user has an org.
+ *
+ * SECURITY: Only allows provisioning if:
+ * 1. User has a matching pending invite, OR
+ * 2. This is genuinely a brand-new workspace (no other users exist yet)
  */
 export const provision = mutation({
   args: {},
@@ -43,7 +46,6 @@ export const provision = mutation({
     if (user.orgId) return { status: "ready" as const };
 
     const email = user.email?.toLowerCase().trim();
-    const role: Role = "admin";
 
     // 1) Pending invite path — user joins an existing organization.
     if (email) {
@@ -58,6 +60,7 @@ export const provision = mutation({
           orgId,
           role: pending.role as Role,
           name: user.name ?? pending.email,
+          accountStatus: "active",
         });
         await audit(ctx, null, {
           orgId,
@@ -72,7 +75,18 @@ export const provision = mutation({
       }
     }
 
-    // 2) New organization path.
+    // 2) New organization path — only allowed if no org exists yet (first user).
+    // SECURITY: In a private platform, new orgs should only be created by
+    // the first user. Subsequent users must be invited.
+    const allUsers = await ctx.db.query("users").collect();
+    const anyWithOrg = allUsers.filter((u) => u.orgId);
+    if (anyWithOrg.length > 0) {
+      // There are already provisioned users — new signup is not allowed.
+      throw new ConvexError(
+        "This is a private platform. You must be invited by an administrator to gain access.",
+      );
+    }
+
     const orgName = user.name ? `${user.name.split(" ")[0]}'s Dispatch` : "My Dispatch Company";
     const orgId: Id<"organizations"> = await ctx.db.insert("organizations", {
       name: orgName,
@@ -87,7 +101,12 @@ export const provision = mutation({
       notificationPrefs: {},
     });
 
-    await ctx.db.patch(userId, { orgId, role: "admin", name: user.name ?? orgName });
+    await ctx.db.patch(userId, {
+      orgId,
+      role: "admin",
+      name: user.name ?? orgName,
+      accountStatus: "active",
+    });
 
     await audit(ctx, null, {
       orgId,
@@ -111,6 +130,11 @@ export const provision = mutation({
   },
 });
 
+// ---------------------------------------------------------------------------
+// Admin user management
+// ---------------------------------------------------------------------------
+
+/** Get all org users with full details for admin management. */
 export const getOrgUsers = query({
   args: {},
   handler: async (ctx) => {
@@ -124,7 +148,13 @@ export const getOrgUsers = query({
         email: u.email ?? "",
         role: (u.role ?? "read_only") as Role,
         disabled: !!u.disabled,
-        createdAt: (u._creationTime ?? 0),
+        accountStatus: (u.accountStatus as string) ?? "active",
+        carrierId: u.carrierId ?? undefined,
+        driverId: u.driverId ?? undefined,
+        phone: u.phone ?? "",
+        title: u.title ?? "",
+        lastLoginAt: u.lastLoginAt ?? 0,
+        createdAt: u._creationTime ?? 0,
       }));
     const pending = await ctx.db
       .query("pendingUsers")
@@ -143,8 +173,69 @@ export const getOrgUsers = query({
   },
 });
 
+/** Admin creates a user directly (sets up their account status for login). */
+export const createUser = mutation({
+  args: {
+    email: v.string(),
+    name: v.string(),
+    role: v.union(...ROLES.map((r) => v.literal(r))),
+    carrierId: v.optional(v.id("carriers")),
+    phone: v.optional(v.string()),
+    title: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const s = await requireAdmin(ctx);
+    const email = validEmail(args.email);
+    if (!email) throw new ConvexError("A valid email is required.");
+    if (!args.name.trim()) throw new ConvexError("Name is required.");
+
+    // Check if email already has a pending invite
+    const existingInvite = await ctx.db
+      .query("pendingUsers")
+      .withIndex("by_email", (q) => q.eq("email", email))
+      .first();
+    if (existingInvite && existingInvite.status === "pending") {
+      throw new ConvexError("An invitation for this email already exists.");
+    }
+
+    // Create pending user entry
+    const id = await ctx.db.insert("pendingUsers", {
+      email,
+      orgId: s.orgId as never,
+      role: args.role,
+      invitedBy: s.userId as never,
+      status: "pending",
+      createdAt: Date.now(),
+    });
+
+    // If carrier_id specified, update the pending invite metadata
+    // The actual user record gets created when they accept the invite
+    await audit(ctx, s, {
+      action: "user.created",
+      entity: "user",
+      entityId: id,
+      metadata: {
+        email,
+        name: args.name,
+        role: args.role,
+        carrierId: args.carrierId,
+        method: "admin_created",
+      },
+    });
+
+    return { id };
+  },
+});
+
+/** Admin invites a user by email. */
 export const inviteUser = mutation({
-  args: { email: v.string(), role: v.union(...ROLES.map((r) => v.literal(r))) },
+  args: {
+    email: v.string(),
+    role: v.union(...ROLES.map((r) => v.literal(r))),
+    name: v.optional(v.string()),
+    carrierId: v.optional(v.id("carriers")),
+    phone: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
     const s = await requireAdmin(ctx);
     const email = validEmail(args.email);
@@ -166,12 +257,13 @@ export const inviteUser = mutation({
       action: "user.invited",
       entity: "user",
       entityId: id,
-      metadata: { email, role: args.role },
+      metadata: { email, role: args.role, name: args.name, carrierId: args.carrierId },
     });
     return { id };
   },
 });
 
+/** Revoke a pending invitation. */
 export const revokeInvite = mutation({
   args: { id: v.id("pendingUsers") },
   handler: async (ctx, args) => {
@@ -184,6 +276,7 @@ export const revokeInvite = mutation({
   },
 });
 
+/** Admin changes a user's role. */
 export const updateUserRole = mutation({
   args: { userId: v.id("users"), role: v.union(...ROLES.map((r) => v.literal(r))) },
   handler: async (ctx, args) => {
@@ -203,6 +296,7 @@ export const updateUserRole = mutation({
   },
 });
 
+/** Admin toggles a user's disabled status. */
 export const setUserDisabled = mutation({
   args: { userId: v.id("users"), disabled: v.boolean() },
   handler: async (ctx, args) => {
@@ -221,3 +315,126 @@ export const setUserDisabled = mutation({
   },
 });
 
+/** Admin changes a user's account status (active, suspended, revoked). */
+export const setAccountStatus = mutation({
+  args: {
+    userId: v.id("users"),
+    accountStatus: v.union(
+      ...ACCOUNT_STATUSES.map((s) => v.literal(s)),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const s = await requireAdmin(ctx);
+    if (args.userId === s.userId) throw new ConvexError("You cannot change your own account status.");
+    const target = await ctx.db.get(args.userId);
+    if (!target || target.orgId !== s.orgId) throw new ConvexError("User not found in this workspace.");
+    if (target.role === "super_admin" && s.role !== "super_admin") throw new ConvexError("You cannot modify a super admin.");
+
+    const previousStatus = target.accountStatus ?? "active";
+    await ctx.db.patch(args.userId, { accountStatus: args.accountStatus });
+
+    await audit(ctx, s, {
+      action: "user.account_status.changed",
+      entity: "user",
+      entityId: args.userId,
+      metadata: {
+        from: previousStatus,
+        to: args.accountStatus,
+        email: target.email,
+      },
+    });
+
+    return { ok: true };
+  },
+});
+
+/** Admin assigns a carrier to a user (for carrier_admin / driver roles). */
+export const assignCarrier = mutation({
+  args: {
+    userId: v.id("users"),
+    carrierId: v.optional(v.id("carriers")),
+  },
+  handler: async (ctx, args) => {
+    const s = await requireAdmin(ctx);
+    const target = await ctx.db.get(args.userId);
+    if (!target || target.orgId !== s.orgId) throw new ConvexError("User not found in this workspace.");
+
+    if (args.carrierId) {
+      const carrier = await ctx.db.get(args.carrierId);
+      if (!carrier || carrier.orgId !== s.orgId) throw new ConvexError("Carrier not found.");
+    }
+
+    await ctx.db.patch(args.userId, { carrierId: args.carrierId as Id<"carriers"> | undefined });
+    await audit(ctx, s, {
+      action: "user.carrier.assigned",
+      entity: "user",
+      entityId: args.userId,
+      metadata: {
+        carrierId: args.carrierId,
+        email: target.email,
+      },
+    });
+
+    return { ok: true };
+  },
+});
+
+/** Admin updates a user's profile info (name, phone, title). */
+export const updateUserProfile = mutation({
+  args: {
+    userId: v.id("users"),
+    name: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    title: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const s = await requireAdmin(ctx);
+    const target = await ctx.db.get(args.userId);
+    if (!target || target.orgId !== s.orgId) throw new ConvexError("User not found in this workspace.");
+
+    const patch: Record<string, unknown> = {};
+    if (args.name !== undefined) patch.name = args.name;
+    if (args.phone !== undefined) patch.phone = args.phone;
+    if (args.title !== undefined) patch.title = args.title;
+
+    if (Object.keys(patch).length > 0) {
+      await ctx.db.patch(args.userId, patch as never);
+      await audit(ctx, s, {
+        action: "user.profile.updated",
+        entity: "user",
+        entityId: args.userId,
+        metadata: { fields: Object.keys(patch), email: target.email },
+      });
+    }
+
+    return { ok: true };
+  },
+});
+
+/** Get user count by role for admin overview. */
+export const getUserStats = query({
+  args: {},
+  handler: async (ctx) => {
+    const s = await requireAdmin(ctx);
+    const users = await ctx.db.query("users").collect();
+    const orgUsers = users.filter((u) => u.orgId === s.orgId && !u.isAnonymous);
+    const byRole: Record<string, number> = {};
+    for (const u of orgUsers) {
+      const role = (u.role ?? "read_only") as string;
+      byRole[role] = (byRole[role] ?? 0) + 1;
+    }
+    return {
+      total: orgUsers.length,
+      active: orgUsers.filter((u) => (u.accountStatus ?? "active") === "active").length,
+      suspended: orgUsers.filter((u) => u.accountStatus === "suspended").length,
+      revoked: orgUsers.filter((u) => u.accountStatus === "revoked").length,
+      pending: (
+        await ctx.db
+          .query("pendingUsers")
+          .withIndex("by_org", (q) => q.eq("orgId", s.orgId))
+          .collect()
+      ).filter((p) => p.status === "pending").length,
+      byRole,
+    };
+  },
+});

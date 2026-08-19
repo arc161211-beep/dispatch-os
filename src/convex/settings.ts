@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { audit } from "./lib/audit";
 import { requireAdmin, requireOrg } from "./lib/context";
-import { FEE_TYPES, FeeType } from "./constants";
+import { CARRIER_FINANCIAL_VISIBILITY, FEE_TYPES, FeeType } from "./constants";
 import { optString } from "./lib/validation";
 
 export const get = query({
@@ -44,6 +44,16 @@ export const update = mutation({
         emailDailyDigest: v.optional(v.boolean()),
         smsUrgent: v.optional(v.boolean()),
         push: v.optional(v.boolean()),
+      }),
+    ),
+    carrierFinancialVisibility: v.optional(
+      v.union(...CARRIER_FINANCIAL_VISIBILITY.map((v2) => v.literal(v2))),
+    ),
+    dataRetention: v.optional(
+      v.object({
+        locationHistoryDays: v.optional(v.number()),
+        messageRetentionDays: v.optional(v.number()),
+        auditLogRetentionDays: v.optional(v.number()),
       }),
     ),
   },

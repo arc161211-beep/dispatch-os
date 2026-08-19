@@ -21,6 +21,7 @@ export interface Session {
   name?: string;
   email?: string;
   disabled: boolean;
+  accountStatus?: "active" | "suspended" | "revoked" | "invited";
 }
 
 export type Ctx = QueryCtx | MutationCtx | ActionCtx;
@@ -31,6 +32,7 @@ async function loadSession(ctx: QueryCtx | MutationCtx): Promise<Session | null>
   const user = await ctx.db.get(userId);
   if (!user) return null;
   if (!user.orgId) return null; // not yet provisioned
+  const accountStatus = (user.accountStatus as Session["accountStatus"]) ?? "active";
   return {
     userId,
     orgId: user.orgId,
@@ -40,6 +42,7 @@ async function loadSession(ctx: QueryCtx | MutationCtx): Promise<Session | null>
     name: user.name ?? undefined,
     email: user.email ?? undefined,
     disabled: !!user.disabled,
+    accountStatus,
   };
 }
 
@@ -60,6 +63,8 @@ export async function requireOrg(ctx: QueryCtx | MutationCtx): Promise<Session> 
   const s = await loadSession(ctx);
   if (!s) throw new ConvexError("Your workspace is still being set up. Please refresh.");
   if (s.disabled) throw new ConvexError("This account has been disabled. Contact your administrator.");
+  if (s.accountStatus === "suspended") throw new ConvexError("Your account has been suspended. Contact your administrator.");
+  if (s.accountStatus === "revoked") throw new ConvexError("Your account access has been revoked. Contact your administrator.");
   return s;
 }
 

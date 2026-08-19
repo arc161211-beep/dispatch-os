@@ -44,6 +44,7 @@ import {
   Truck,
   UserRound,
   Users,
+  UserCog,
   Wallet,
 } from "lucide-react";
 
@@ -146,6 +147,7 @@ function useNavItems() {
         title: "System",
         items: [
           { to: "/notifications", label: "Notifications", icon: Bell },
+          { to: "/users", label: "User Management", icon: UserCog },
           { to: "/integrations", label: "Integrations", icon: Plug },
           { to: "/settings", label: "Settings", icon: Settings },
           { to: "/audit", label: "Audit Log", icon: ScrollText },

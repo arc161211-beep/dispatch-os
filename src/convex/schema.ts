@@ -44,6 +44,8 @@ const schema = defineSchema(
       phone: v.optional(v.string()),
       title: v.optional(v.string()),
       disabled: v.optional(v.boolean()),
+      accountStatus: v.optional(v.union(v.literal("active"), v.literal("suspended"), v.literal("revoked"), v.literal("invited"))),
+      lastLoginAt: v.optional(v.number()),
     }).index("email", ["email"]),
 
     organizations: defineTable({
@@ -79,6 +81,12 @@ const schema = defineSchema(
       lastLoadNumber: v.optional(v.number()),
       lastInvoiceNumber: v.optional(v.number()),
       demoMode: v.optional(v.boolean()),
+      carrierFinancialVisibility: v.optional(v.union(v.literal("full"), v.literal("rate_only"), v.literal("fee_visible"), v.literal("none"))),
+      dataRetention: v.optional(v.object({
+        locationHistoryDays: v.optional(v.number()),
+        messageRetentionDays: v.optional(v.number()),
+        auditLogRetentionDays: v.optional(v.number()),
+      })),
     }).index("by_org", ["orgId"]),
 
     pendingUsers: defineTable({
@@ -195,6 +203,8 @@ const schema = defineSchema(
       truckId: v.optional(v.id("trucks")),
       homeLocation: v.optional(v.string()),
       currentLocation: v.optional(v.string()),
+      lat: v.optional(v.number()),
+      lon: v.optional(v.number()),
       availability: v.union(...DRIVER_STATUSES.map((s) => v.literal(s))),
       licenseExpiry: v.optional(v.number()),
       medicalCardExpiry: v.optional(v.number()),
@@ -524,6 +534,37 @@ const schema = defineSchema(
     })
       .index("by_org", ["orgId"])
       .index("by_org_provider", ["orgId", "provider"]),
+
+    locationHistory: defineTable({
+      orgId,
+      entityType: v.union(v.literal("truck"), v.literal("driver")),
+      entityId: v.string(),
+      lat: v.number(),
+      lon: v.number(),
+      location: v.optional(v.string()),
+      source: v.optional(v.union(v.literal("driver_mobile"), v.literal("browser_geolocation"), v.literal("gps_telematics"), v.literal("manual"), v.literal("other"))),
+      accuracy: v.optional(v.number()),
+      at: v.number(),
+    })
+      .index("by_org", ["orgId"])
+      .index("by_org_entity", ["orgId", "entityType", "entityId"])
+      .index("by_org_entity_at", ["orgId", "entityType", "entityId", "at"]),
+
+    userNotificationPrefs: defineTable({
+      orgId,
+      userId,
+      prefs: v.object({
+        urgent: v.optional(v.boolean()),
+        loads: v.optional(v.boolean()),
+        documents: v.optional(v.boolean()),
+        messages: v.optional(v.boolean()),
+        tasks: v.optional(v.boolean()),
+        finance: v.optional(v.boolean()),
+        location: v.optional(v.boolean()),
+      }),
+      updatedAt: v.number(),
+    })
+      .index("by_org_user", ["orgId", "userId"]),
   },
   {
     schemaValidation: false,

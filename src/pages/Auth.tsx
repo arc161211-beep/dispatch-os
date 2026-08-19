@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useAuth } from "@/hooks/use-auth";
-import { ArrowLeft, ArrowRight, Loader2, Mail, ShieldCheck, UserX } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, Mail, ShieldCheck, Lock } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
@@ -64,18 +64,6 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     }
   };
 
-  const handleGuestLogin = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      await signIn("anonymous");
-      navigate(redirect);
-    } catch (e) {
-      setError(`Failed to sign in as guest: ${e instanceof Error ? e.message : "Unknown error"}`);
-      setIsLoading(false);
-    }
-  };
-
   return (
     <div className="flex min-h-screen flex-col">
       <div className="flex flex-1 items-center justify-center px-4 py-10">
@@ -94,7 +82,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
               with secure, audited, tenant-isolated records.
             </p>
             <ul className="mt-8 space-y-3 text-sm">
-              {["Email verification codes — no stored passwords", "Workspace created automatically for new sign-ups", "Role-based access and full audit trail"].map((t) => (
+              {["Email verification codes — no stored passwords", "Private platform — admin-invited accounts only", "Role-based access and full audit trail"].map((t) => (
                 <li key={t} className="flex items-start gap-2.5 text-muted-foreground">
                   <ShieldCheck className="mt-0.5 size-4 shrink-0 text-emerald-500" />
                   {t}
@@ -115,8 +103,8 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                       </Button>
                       <span className="text-sm font-medium lg:hidden">DispatchOS</span>
                     </div>
-                    <CardTitle className="text-xl">Get started</CardTitle>
-                    <CardDescription>Enter your email to log in or sign up</CardDescription>
+                    <CardTitle className="text-xl">Sign in</CardTitle>
+                    <CardDescription>Enter your email to receive a verification code</CardDescription>
                   </CardHeader>
                   <form onSubmit={handleEmailSubmit}>
                     <CardContent>
@@ -137,20 +125,6 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                         </Button>
                       </div>
                       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-                      <div className="mt-4">
-                        <div className="relative">
-                          <div className="absolute inset-0 flex items-center">
-                            <span className="w-full border-t" />
-                          </div>
-                          <div className="relative flex justify-center text-xs uppercase">
-                            <span className="bg-card px-2 text-muted-foreground">Or</span>
-                          </div>
-                        </div>
-                        <Button type="button" variant="outline" className="mt-4 w-full" onClick={handleGuestLogin} disabled={isLoading}>
-                          <UserX className="mr-2 size-4" />
-                          Continue as guest
-                        </Button>
-                      </div>
                     </CardContent>
                   </form>
                 </>
@@ -211,9 +185,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                 </>
               )}
               <div className="border-t bg-muted/40 px-6 py-3 text-center text-xs text-muted-foreground">
-                By continuing you agree to the{" "}
-                <a href="#" className="underline hover:text-foreground">Privacy Policy</a> and{" "}
-                <a href="#" className="underline hover:text-foreground">Terms of Service</a>.
+                <div className="flex items-center justify-center gap-1.5">
+                  <Lock className="size-3" />
+                  Private platform — access requires administrator invitation
+                </div>
               </div>
             </Card>
           </div>

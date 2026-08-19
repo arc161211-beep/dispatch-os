@@ -39,6 +39,7 @@ const SettingsPage = lazy(() => import("./pages/Settings.tsx"));
 const AuditLog = lazy(() => import("./pages/AuditLog.tsx"));
 const PortalDriver = lazy(() => import("./pages/PortalDriver.tsx"));
 const PortalCarrier = lazy(() => import("./pages/PortalCarrier.tsx"));
+const UserManagement = lazy(() => import("./pages/UserManagement.tsx"));
 
 // Simple loading fallback for route transitions
 function RouteLoading() {
@@ -155,6 +156,7 @@ createRoot(document.getElementById("root")!).render(
               <Routes>
                 <Route path="/" element={<Landing />} />
                 <Route path="/auth" element={<AuthPage redirectAfterAuth="/dashboard" />} />
+                {/* Note: No public signup route — access is invite-only */}
                 <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
                 <Route path="/leads" element={<Protected><Leads /></Protected>} />
                 <Route path="/carriers" element={<Protected><Carriers /></Protected>} />
@@ -175,6 +177,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/notifications" element={<Protected><Notifications /></Protected>} />
                 <Route path="/integrations" element={<Protected><Integrations /></Protected>} />
                 <Route path="/settings" element={<Protected><SettingsPage /></Protected>} />
+                <Route path="/users" element={<Protected><UserManagement /></Protected>} />
                 <Route path="/audit" element={<Protected><AuditLog /></Protected>} />
                 <Route path="/portal/driver" element={<Protected><PortalDriver /></Protected>} />
                 <Route path="/portal/carrier" element={<Protected><PortalCarrier /></Protected>} />
