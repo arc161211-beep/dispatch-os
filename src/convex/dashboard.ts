@@ -99,6 +99,28 @@ export const summary = query({
       `${overdueInvoices.length} overdue invoice${overdueInvoices.length === 1 ? "" : "s"}`,
     ].join(" · ");
 
+    // Trucks that need loads
+    const trucksWithLoadIds = new Set(
+      activeLoads.filter((l) => l.truckId).map((l) => l.truckId),
+    );
+    const trucksNeedingLoads = trucks
+      .filter((t) => t.availability === "Available" && !trucksWithLoadIds.has(t._id))
+      .map((t) => ({
+        _id: t._id,
+        unitNumber: t.unitNumber,
+        type: t.type,
+        carrierId: t.carrierId,
+        currentLocation: t.currentLocation,
+        lat: t.lat,
+        lon: t.lon,
+      }));
+
+    // Client requests (urgent/needs_reply messages from carrier conversations)
+    const clientRequests = messages
+      .filter((m) => ["urgent", "high"].includes(m.priority ?? "") && ["needs_reply", "unread"].includes(m.status))
+      .sort((a, b) => b._creationTime - a._creationTime)
+      .slice(0, 5);
+
     return {
       ops: {
         activeCarriers: carriers.filter((c) => c.status === "Active").length,
@@ -135,6 +157,8 @@ export const summary = query({
         pickups: loads.filter((l) => l.pickupDate && l.pickupDate >= today.start && l.pickupDate < today.start + 7 * DAY).sort((a, b) => (a.pickupDate ?? 0) - (b.pickupDate ?? 0)).slice(0, 10),
         deliveries: loads.filter((l) => l.deliveryDate && l.deliveryDate >= today.start && l.deliveryDate < today.start + 7 * DAY).sort((a, b) => (a.deliveryDate ?? 0) - (b.deliveryDate ?? 0)).slice(0, 10),
       },
+      trucksNeedingLoads,
+      clientRequests,
       dailySummaryText,
       demoMode: settings?.demoMode ?? false,
       empty: loads.length === 0 && carriers.length === 0 && leads.length === 0 && trucks.length === 0,

@@ -7,7 +7,7 @@ import { useTimezone, useCanWrite } from "@/hooks/use-app";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PageHeader, StatCard, SectionCard, StatusBadge, NextActionPill, Money, LoadingState, EmptyState } from "@/components/app/shared";
+import { PageHeader, StatCard, SectionCard, StatusBadge, Money, LoadingState } from "@/components/app/shared";
 import { fmtDateTime, fmtDate, fmtRelative, tzDayStart } from "@/lib/dates";
 import { statusClass } from "@/lib/status";
 import { cn } from "@/lib/utils";
@@ -16,7 +16,7 @@ import {
   ArrowRight,
   Building2,
   CheckCircle2,
-  FileText,
+  MapPin,
   Package,
   Route,
   Sparkles,
@@ -30,6 +30,7 @@ export default function Dashboard() {
   const tz = useTimezone();
   const canWrite = useCanWrite();
   const summary = useQuery(api.dashboard.summary);
+  const truckLocations = useQuery(api.location.getTruckLocations, {});
   const aiConfig = useQuery(api.ai.config);
   const generateSummary = useAction(api.ai.generateDailySummary);
 
@@ -57,8 +58,6 @@ export default function Dashboard() {
     return "Good evening";
   })();
 
-  const today = tzDayStart(0, tz);
-
   const quickActions = canWrite
     ? [
         { label: "New Load", to: "/loads?new=1" },
@@ -67,6 +66,8 @@ export default function Dashboard() {
         { label: "Ask AI", to: "/assistant" },
       ]
     : [{ label: "Ask AI", to: "/assistant" }];
+
+  const trucksNeedingLoads = summary.trucksNeedingLoads ?? [];
 
   return (
     <div className="space-y-8">
@@ -86,7 +87,7 @@ export default function Dashboard() {
         }
       />
 
-      {/* Onboarding checklist for a fresh workspace */}
+      {/* Onboarding checklist */}
       {summary.empty && (
         <SectionCard title="Get DispatchOS ready in minutes" description="Set up your workspace with real records — no demo data required.">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -136,6 +137,75 @@ export default function Dashboard() {
           <StatCard label="Paid fees" value={<Money cents={summary.finance.paidFeesCents} />} tone="good" />
           <StatCard label="Overdue invoices" value={summary.finance.overdueInvoices} tone={summary.finance.overdueInvoices > 0 ? "bad" : "default"} />
         </div>
+      </div>
+
+      {/* Map + Trucks needing loads */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <SectionCard
+          title="Truck Locations"
+          description={truckLocations && truckLocations.length > 0 ? `${truckLocations.length} truck${truckLocations.length !== 1 ? "s" : ""} with GPS` : undefined}
+        >
+          {!truckLocations || truckLocations.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-6 text-center">
+              <MapPin className="size-6 text-muted-foreground" />
+              <p className="mt-2 text-sm text-muted-foreground">No GPS data available</p>
+              <p className="text-xs text-muted-foreground mt-1">Truck positions appear when drivers share location</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {truckLocations.slice(0, 6).map((t: any) => (
+                <div key={t.truckId} className="flex items-center justify-between gap-3 rounded-lg bg-muted/30 p-2.5 hover:bg-muted/50">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{t.unitNumber} {t.type ? `(${t.type})` : ""}</p>
+                    <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <MapPin className="size-3" />
+                      {t.location ?? `${t.lat.toFixed(4)}, ${t.lon.toFixed(4)}`}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <StatusBadge status={t.availability} />
+                    {t.driverName && (
+                      <p className="text-[10px] text-muted-foreground mt-1">{t.driverName}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {truckLocations.length > 6 && (
+                <Link to="/trucks" className="block text-center text-xs font-medium text-primary hover:underline py-1">
+                  View all {truckLocations.length} trucks →
+                </Link>
+              )}
+            </div>
+          )}
+        </SectionCard>
+
+        <SectionCard
+          title="Trucks Needing Loads"
+          description={`${trucksNeedingLoads.length} available truck${trucksNeedingLoads.length !== 1 ? "s" : ""} without assignment`}
+          actions={canWrite ? (
+            <Link to="/loads?new=1" className="text-xs font-medium text-primary hover:underline">Create load</Link>
+          ) : undefined}
+        >
+          {trucksNeedingLoads.length === 0 ? (
+            <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+              <CheckCircle2 className="size-4 text-emerald-500" /> All trucks are assigned or unavailable.
+            </div>
+          ) : (
+            <div className="divide-y">
+              {trucksNeedingLoads.slice(0, 6).map((t: any) => (
+                <div key={t._id} className="flex items-center justify-between py-2.5">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{t.unitNumber} {t.type ? `(${t.type})` : ""}</p>
+                    <p className="text-xs text-muted-foreground">{t.currentLocation ?? "No location"}</p>
+                  </div>
+                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-transparent text-[10px]">
+                    Needs load
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          )}
+        </SectionCard>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
