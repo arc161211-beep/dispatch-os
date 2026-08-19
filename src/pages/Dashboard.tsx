@@ -11,6 +11,7 @@ import { PageHeader, StatCard, SectionCard, StatusBadge, Money, LoadingState } f
 import { fmtDateTime, fmtDate, fmtRelative, tzDayStart } from "@/lib/dates";
 import { statusClass } from "@/lib/status";
 import { cn } from "@/lib/utils";
+import { TruckMap } from "@/components/app/TruckMap";
 import {
   AlertTriangle,
   ArrowRight,
@@ -145,38 +146,19 @@ export default function Dashboard() {
           title="Truck Locations"
           description={truckLocations && truckLocations.length > 0 ? `${truckLocations.length} truck${truckLocations.length !== 1 ? "s" : ""} with GPS` : undefined}
         >
-          {!truckLocations || truckLocations.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-6 text-center">
-              <MapPin className="size-6 text-muted-foreground" />
-              <p className="mt-2 text-sm text-muted-foreground">No GPS data available</p>
-              <p className="text-xs text-muted-foreground mt-1">Truck positions appear when drivers share location</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {truckLocations.slice(0, 6).map((t: any) => (
-                <div key={t.truckId} className="flex items-center justify-between gap-3 rounded-lg bg-muted/30 p-2.5 hover:bg-muted/50">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">{t.unitNumber} {t.type ? `(${t.type})` : ""}</p>
-                    <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <MapPin className="size-3" />
-                      {t.location ?? `${t.lat.toFixed(4)}, ${t.lon.toFixed(4)}`}
-                    </p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <StatusBadge status={t.availability} />
-                    {t.driverName && (
-                      <p className="text-[10px] text-muted-foreground mt-1">{t.driverName}</p>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {truckLocations.length > 6 && (
-                <Link to="/trucks" className="block text-center text-xs font-medium text-primary hover:underline py-1">
-                  View all {truckLocations.length} trucks →
-                </Link>
-              )}
-            </div>
-          )}
+          <TruckMap
+            trucks={(truckLocations ?? []).map((t: any) => ({
+              truckId: t.truckId,
+              unitNumber: t.unitNumber,
+              type: t.type,
+              driverName: t.driverName,
+              availability: t.availability,
+              lat: t.lat,
+              lon: t.lon,
+              location: t.location,
+              at: t.at,
+            }))}
+          />
         </SectionCard>
 
         <SectionCard

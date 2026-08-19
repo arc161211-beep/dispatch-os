@@ -86,25 +86,71 @@ export default function Messages() {
     );
   }
 
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState<"" | "urgent" | "high" | "normal">("");
+
+  // Debounce search
+  useState(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    if (searchQuery !== debouncedSearch) {
+      timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+    }
+    return () => clearTimeout(timer);
+  });
+
+  const filteredConversations = (conversations ?? []).filter((c: Conversation) => {
+    const matchesSearch = !debouncedSearch ||
+      c.title?.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+      c.lastMessagePreview?.toLowerCase().includes(debouncedSearch.toLowerCase());
+    const matchesPriority = !priorityFilter ||
+      (priorityFilter === "urgent" && c.urgent > 0) ||
+      (priorityFilter === "high" && c.urgent > 0);
+    return matchesSearch && matchesPriority;
+  });
+
   return (
     <div className="space-y-6">
       <PageHeader title="Messages" description={`${conversations?.length ?? 0} conversations`} />
       {conversations === undefined ? <LoadingState /> : (
         conversations.length === 0 ? <EmptyState icon={<MessageSquare className="size-6" />} title="No conversations" description="Conversations are created when you add brokers, carriers, or drivers." /> : (
-          <div className="space-y-1">
-            {conversations.map((c) => (
-              <button key={c._id} onClick={() => handleSelect(c._id)} className="flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors hover:bg-muted/40">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium truncate">{c.title}</p>
-                    {c.unread > 0 && <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-transparent text-[10px]">{c.unread} unread</Badge>}
-                    {c.urgent > 0 && <Badge variant="outline" className="bg-red-500/10 text-red-600 border-transparent text-[10px]">{c.urgent} urgent</Badge>}
-                  </div>
-                  <p className="text-xs text-muted-foreground truncate mt-0.5">{c.lastMessagePreview || "No messages"}</p>
-                </div>
-                <span className="text-[10px] text-muted-foreground shrink-0">{c.lastMessageAt ? fmtRelative(c.lastMessageAt) : ""}</span>
-              </button>
-            ))}
+          <div className="space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search messages..."
+                className="flex-1 h-9 rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+              />
+              <select
+                value={priorityFilter}
+                onChange={(e) => setPriorityFilter(e.target.value as any)}
+                className="h-9 rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+              >
+                <option value="">All priorities</option>
+                <option value="urgent">🔴 Urgent</option>
+                <option value="high">🟡 High</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              {filteredConversations.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">No conversations match your search.</p>
+              ) : (
+                filteredConversations.map((c) => (
+                  <button key={c._id} onClick={() => handleSelect(c._id)} className="flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors hover:bg-muted/40">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium truncate">{c.title}</p>
+                        {c.unread > 0 && <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-transparent text-[10px]">{c.unread} unread</Badge>}
+                        {c.urgent > 0 && <Badge variant="outline" className="bg-red-500/10 text-red-600 border-transparent text-[10px]">{c.urgent} urgent</Badge>}
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate mt-0.5">{c.lastMessagePreview || "No messages"}</p>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground shrink-0">{c.lastMessageAt ? fmtRelative(c.lastMessageAt) : ""}</span>
+                  </button>
+                ))
+              )}
+            </div>
           </div>
         )
       )}

@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
+import { AIAssistant } from "@/components/app/AIAssistant";
 import { PageHeader, StatusBadge, SectionCard, EmptyState, errorMessage } from "@/components/app/shared";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -229,6 +230,15 @@ export default function PortalDriver() {
           description="You don't have any assigned loads right now."
         />
       )}
+
+      {/* AI Assistant */}
+      <SectionCard title="Driver Assistant" description="Ask about your current load and next actions">
+        <AIAssistant
+          title="Driver Assistant"
+          description="Ask about your current load"
+          suggestedQuestions={["Where is my pickup?", "Where is delivery?", "What is my next action?", "What documents are required?"]}
+        />
+      </SectionCard>
 
       {/* Upcoming loads */}
       {upcomingLoads.length > 0 && (

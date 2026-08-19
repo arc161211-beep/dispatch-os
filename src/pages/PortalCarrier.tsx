@@ -12,6 +12,8 @@ import { fmtDate, fmtDateTime, fmtRelative } from "@/lib/dates";
 import { useTimezone } from "@/hooks/use-app";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
+import { TruckMap } from "@/components/app/TruckMap";
+import { AIAssistant } from "@/components/app/AIAssistant";
 import {
   Package,
   Truck,
@@ -26,6 +28,7 @@ import {
   ChevronRight,
   Share2,
   Loader2,
+  Sparkles,
 } from "lucide-react";
 
 type LoadType = any;
@@ -83,6 +86,7 @@ export default function PortalCarrier() {
           <TabsTrigger value="fleet">Fleet</TabsTrigger>
           <TabsTrigger value="location">Map</TabsTrigger>
           <TabsTrigger value="documents">Docs</TabsTrigger>
+          <TabsTrigger value="ai"><Sparkles className="size-3.5 mr-1" /> AI</TabsTrigger>
         </TabsList>
 
         {/* Overview */}
@@ -273,55 +277,30 @@ export default function PortalCarrier() {
         {/* Map */}
         <TabsContent value="location" className="space-y-4">
           <SectionCard title="Truck Locations" description="Current positions of your trucks">
-            {!truckLocations || truckLocations.length === 0 ? (
-              <EmptyState
-                icon={<MapPin className="size-6" />}
-                title="No truck locations"
-                description="Truck positions will appear here when GPS data is available."
-              />
-            ) : (
-              <div className="space-y-3">
-                {/* Map placeholder with truck markers */}
-                <div className="relative h-64 rounded-lg border bg-muted/30 overflow-hidden">
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center">
-                      <MapPin className="size-8 text-muted-foreground mx-auto" />
-                      <p className="text-sm text-muted-foreground mt-2">
-                        {truckLocations.length} truck{truckLocations.length !== 1 ? "s" : ""} with GPS data
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Connect a maps integration for full map view
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Truck list with locations */}
-                <div className="divide-y rounded-lg border border-border/70">
-                  {truckLocations.map((t: any) => (
-                    <div key={t.truckId} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/30">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium">{t.unitNumber} {t.type ? `(${t.type})` : ""}</p>
-                        {t.driverName && (
-                          <p className="text-xs text-muted-foreground">Driver: {t.driverName}</p>
-                        )}
-                        <p className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-                          <MapPin className="size-3" />
-                          {t.location ?? `${t.lat.toFixed(4)}, ${t.lon.toFixed(4)}`}
-                        </p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <StatusBadge status={t.availability} />
-                        <p className="text-[10px] text-muted-foreground mt-1">
-                          {fmtDateTime(t.at, tz)}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            <TruckMap
+              trucks={(truckLocations ?? []).map((t: any) => ({
+                truckId: t.truckId,
+                unitNumber: t.unitNumber,
+                type: t.type,
+                driverName: t.driverName,
+                availability: t.availability,
+                lat: t.lat,
+                lon: t.lon,
+                location: t.location,
+                at: t.at,
+              }))}
+              height="h-96"
+            />
           </SectionCard>
+        </TabsContent>
+
+        {/* AI Assistant */}
+        <TabsContent value="ai" className="space-y-4">
+          <AIAssistant
+            title="Carrier Assistant"
+            description="Ask about your trucks, loads, and deliveries"
+            suggestedQuestions={["Where is my truck?", "What is my load status?", "When is pickup?", "When is delivery?", "Is POD uploaded?", "Show completed loads"]}
+          />
         </TabsContent>
 
         {/* Documents */}

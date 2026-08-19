@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PageHeader, SectionCard, LoadingState, errorMessage, ConfirmButton } from "@/components/app/shared";
 import { Field, Grid, MoneyInput, SelectInput, TextArea, TextInput } from "@/components/app/forms";
-import { Settings, Save, Trash2, Database } from "lucide-react";
+import { Settings, Save, Trash2, Database, Bell, BellOff } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 export default function SettingsPage() {
   const canAdmin = useCanAdmin();
@@ -107,6 +108,74 @@ export default function SettingsPage() {
           {settings.demoMode && <p className="mt-2 text-xs text-amber-600">Demo mode is active. A banner is shown in the app.</p>}
         </SectionCard>
       )}
+
+      <NotificationPrefsCard />
     </div>
+  );
+}
+
+
+// ---------------------------------------------------------------------------
+// Notification Preferences (per-user)
+// ---------------------------------------------------------------------------
+
+function NotificationPrefsCard() {
+  const prefsData = useQuery(api.settings.getUserNotificationPrefs);
+  const updatePrefs = useMutation(api.settings.updateUserNotificationPrefs);
+  const [prefs, setPrefs] = useState({
+    urgent: true, loads: true, documents: true, messages: true,
+    tasks: true, finance: true, location: true,
+  });
+  const [saved, setSaved] = useState(false);
+
+  // Sync from server
+  if (prefsData && !saved) {
+    const p = prefsData as any;
+    if (p && typeof p.urgent === "boolean") {
+      const serverPrefs = { urgent: p.urgent ?? true, loads: p.loads ?? true, documents: p.documents ?? true, messages: p.messages ?? true, tasks: p.tasks ?? true, finance: p.finance ?? true, location: p.location ?? true };
+      if (JSON.stringify(serverPrefs) !== JSON.stringify(prefs)) {
+        // Use setTimeout to avoid setState during render
+        setTimeout(() => setPrefs(serverPrefs), 0);
+      }
+    }
+  }
+
+  const categories = [
+    { key: "urgent" as const, label: "Urgent alerts", desc: "Critical operational notifications" },
+    { key: "loads" as const, label: "Load updates", desc: "Status changes, assignments, pickups, deliveries" },
+    { key: "documents" as const, label: "Documents", desc: "Upload confirmations, expiry warnings" },
+    { key: "messages" as const, label: "Messages", desc: "New messages, replies, urgent communications" },
+    { key: "tasks" as const, label: "Tasks", desc: "Task assignments, due date reminders" },
+    { key: "finance" as const, label: "Finance", desc: "Invoice updates, payment records" },
+    { key: "location" as const, label: "Location", desc: "GPS updates, truck arrival notifications" },
+  ];
+
+  const handleToggle = async (key: keyof typeof prefs) => {
+    const next = { ...prefs, [key]: !prefs[key] };
+    setPrefs(next);
+    setSaved(true);
+    try { await updatePrefs(next); } catch {}
+  };
+
+  return (
+    <SectionCard title="Notification Preferences" description="Control which notification categories you receive.">
+      <div className="space-y-4">
+        {categories.map((cat) => (
+          <div key={cat.key} className="flex items-center justify-between gap-4 py-1">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">{cat.label}</p>
+              <p className="text-xs text-muted-foreground">{cat.desc}</p>
+            </div>
+            <Switch
+              checked={prefs[cat.key]}
+              onCheckedChange={() => handleToggle(cat.key)}
+            />
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-xs text-muted-foreground">
+        Admins can configure organization-wide quiet hours and urgent-only overrides.
+      </p>
+    </SectionCard>
   );
 }

@@ -74,4 +74,61 @@ export const update = mutation({
   },
 });
 
+// ---------------------------------------------------------------------------
+// Per-user notification preferences
+// ---------------------------------------------------------------------------
+
+export const getUserNotificationPrefs = query({
+  args: {},
+  handler: async (ctx) => {
+    const s = await requireOrg(ctx);
+    const row = await ctx.db
+      .query("userNotificationPrefs")
+      .withIndex("by_org_user", (q) => q.eq("orgId", s.orgId).eq("userId", s.userId))
+      .first();
+    return row?.prefs ?? null;
+  },
+});
+
+export const updateUserNotificationPrefs = mutation({
+  args: {
+    urgent: v.optional(v.boolean()),
+    loads: v.optional(v.boolean()),
+    documents: v.optional(v.boolean()),
+    messages: v.optional(v.boolean()),
+    tasks: v.optional(v.boolean()),
+    finance: v.optional(v.boolean()),
+    location: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const s = await requireOrg(ctx);
+    const existing = await ctx.db
+      .query("userNotificationPrefs")
+      .withIndex("by_org_user", (q) => q.eq("orgId", s.orgId).eq("userId", s.userId))
+      .first();
+
+    const prefs = {
+      urgent: args.urgent ?? true,
+      loads: args.loads ?? true,
+      documents: args.documents ?? true,
+      messages: args.messages ?? true,
+      tasks: args.tasks ?? true,
+      finance: args.finance ?? true,
+      location: args.location ?? true,
+    };
+
+    if (existing) {
+      await ctx.db.patch(existing._id, { prefs, updatedAt: Date.now() });
+    } else {
+      await ctx.db.insert("userNotificationPrefs", {
+        orgId: s.orgId as never,
+        userId: s.userId as never,
+        prefs,
+        updatedAt: Date.now(),
+      });
+    }
+    return { ok: true };
+  },
+});
+
 export type { FeeType };

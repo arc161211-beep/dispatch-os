@@ -3,12 +3,68 @@ import { mutation, query, MutationCtx } from "./_generated/server";
 import { requireOrg } from "./lib/context";
 import type { Session } from "./lib/context";
 
-/** Shared helper so other modules can create in-app notifications. */
+/** Shared helper so other modules can create in-app notifications.
+ * Checks user notification preferences and quiet hours before inserting.
+ * type param maps to preference categories: urgent, loads, documents, messages, tasks, finance, location
+ */
 export async function notify(
   ctx: MutationCtx,
   s: Session,
   n: { title: string; body?: string; link?: string; type?: string },
 ) {
+  // Check user notification preferences
+  const prefRow = await ctx.db
+    .query("userNotificationPrefs")
+    .withIndex("by_org_user", (q) => q.eq("orgId", s.orgId).eq("userId", s.userId))
+    .first();
+
+  if (prefRow) {
+    const cat = n.type ?? "urgent";
+    const prefs = prefRow.prefs;
+    // Map notification type to preference category
+    const categoryMap: Record<string, keyof typeof prefs> = {
+      urgent: "urgent",
+      load: "loads",
+      loads: "loads",
+      document: "documents",
+      documents: "documents",
+      message: "messages",
+      messages: "messages",
+      task: "tasks",
+      tasks: "tasks",
+      finance: "finance",
+      location: "location",
+    };
+    const prefKey = categoryMap[cat] ?? categoryMap[cat.toLowerCase()];
+    if (prefKey && prefs[prefKey] === false) return; // User opted out of this category
+  }
+
+  // Check quiet hours
+  const settings = await ctx.db
+    .query("settings")
+    .withIndex("by_org", (q) => q.eq("orgId", s.orgId))
+    .first();
+
+  if (settings?.quietHoursEnabled && n.type !== "urgent") {
+    const now = new Date();
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+    const currentTime = hours * 60 + minutes;
+
+    const [startH, startM] = (settings.quietHoursStart ?? "22:00").split(":").map(Number);
+    const [endH, endM] = (settings.quietHoursEnd ?? "07:00").split(":").map(Number);
+    const quietStart = startH * 60 + (startM ?? 0);
+    const quietEnd = endH * 60 + (endM ?? 0);
+
+    const inQuietHours = quietStart > quietEnd
+      ? currentTime >= quietStart || currentTime < quietEnd
+      : currentTime >= quietStart && currentTime < quietEnd;
+
+    if (inQuietHours && settings.notificationPrefs?.urgentOnlyDuringQuiet) {
+      return; // Suppress non-urgent during quiet hours
+    }
+  }
+
   await ctx.db.insert("notifications", {
     orgId: s.orgId as never,
     userId: s.userId as never,
