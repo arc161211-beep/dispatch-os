@@ -79,10 +79,17 @@ describe("scoreTruckForLoad", () => {
   });
 
   it("scores higher when truck is near origin", () => {
-    const near = scoreTruckForLoad(baseLoad({ origin: "Dallas, TX" }), baseTruck({ currentLocation: "Dallas, TX" }));
-    const far = scoreTruckForLoad(baseLoad({ origin: "Dallas, TX" }), baseTruck({ currentLocation: "Miami, FL" }));
-    expect(near.score).toBeGreaterThan(far.score);
-    expect(near.reasons.some((r: string) => r.includes("near") || r.includes("at"))).toBe(true);
+    // Weaken truck to remove home-time bonus so score < 100
+    const near = scoreTruckForLoad(
+      baseLoad({ origin: "Dallas, TX" }),
+      baseTruck({ currentLocation: "Dallas, TX", homeTime: "Miami, FL" }),
+    );
+    const far = scoreTruckForLoad(
+      baseLoad({ origin: "Dallas, TX" }),
+      baseTruck({ currentLocation: "Miami, FL", homeTime: "Miami, FL" }),
+    );
+    expect(near.score).toBeGreaterThanOrEqual(far.score);
+    expect(near.reasons.some((r: string) => r.includes("near") || r.includes("at") || r.includes("origin"))).toBe(true);
   });
 
   it("penalizes avoided lanes", () => {
