@@ -40,7 +40,7 @@ export const get = query({
     const s = await requireOrg(ctx);
     const broker = await ctx.db.get(args.id);
     if (!broker || broker.orgId !== s.orgId) throw new ConvexError("Broker not found.");
-    const loads = await ctx.db.query("loads").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).collect();
+    const loads = await ctx.db.query("loads").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).take(2000);
     const convos = await ctx.db.query("conversations").withIndex("by_org_entity", (q) =>
       q.eq("orgId", s.orgId).eq("entityType", "broker").eq("entityId", args.id),
     ).collect();

@@ -71,7 +71,7 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const s = await requireWrite(ctx);
-    if (args.amountCents <= 0) throw new ConvexError("Invoice amount must be greater than zero.");
+    if (!Number.isFinite(args.amountCents) || args.amountCents <= 0) throw new ConvexError("Invoice amount must be a positive number.");
     if (args.carrierId) {
       const c = await ctx.db.get(args.carrierId);
       if (!c || c.orgId !== s.orgId) throw new ConvexError("Carrier not found.");
@@ -129,7 +129,7 @@ export const recordPayment = mutation({
     const inv = await ctx.db.get(args.invoiceId);
     if (!inv || inv.orgId !== s.orgId) throw new ConvexError("Invoice not found.");
     if (inv.status === "Cancelled") throw new ConvexError("Cannot record a payment on a cancelled invoice.");
-    if (args.amountCents <= 0) throw new ConvexError("Payment amount must be greater than zero.");
+    if (!Number.isFinite(args.amountCents) || args.amountCents <= 0) throw new ConvexError("Payment amount must be a positive number.");
     const outstanding = inv.amountCents - inv.paidCents;
     if (args.amountCents > outstanding) {
       throw new ConvexError(`Payment exceeds outstanding balance of $${(outstanding / 100).toFixed(2)}.`);

@@ -42,6 +42,7 @@ const AuditLog = lazy(() => import("./pages/AuditLog.tsx"));
 const PortalDriver = lazy(() => import("./pages/PortalDriver.tsx"));
 const PortalCarrier = lazy(() => import("./pages/PortalCarrier.tsx"));
 const UserManagement = lazy(() => import("./pages/UserManagement.tsx"));
+const StatusPage = lazy(() => import("./pages/Status.tsx"));
 
 // Simple loading fallback for route transitions
 function RouteLoading() {
@@ -183,6 +184,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/settings" element={<Protected><SettingsPage /></Protected>} />
                 <Route path="/users" element={<Protected><UserManagement /></Protected>} />
                 <Route path="/audit" element={<Protected><AuditLog /></Protected>} />
+                <Route path="/status" element={<Protected><StatusPage /></Protected>} />
                 <Route path="/portal/driver" element={<Protected><PortalDriver /></Protected>} />
                 <Route path="/portal/carrier" element={<Protected><PortalCarrier /></Protected>} />
                 <Route path="*" element={<NotFound />} />

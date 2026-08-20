@@ -27,10 +27,11 @@ export const logWebhook = mutation({
   handler: async (ctx, args) => {
     const s = await requireOrg(ctx);
     if (args.externalId) {
-      const existing = await ctx.db.query("webhooks").withIndex("by_org_provider", (q) =>
+      // Bounded: only check recent webhooks for this provider to detect duplicates
+      const recent = await ctx.db.query("webhooks").withIndex("by_org_provider", (q) =>
         q.eq("orgId", s.orgId).eq("provider", args.provider),
-      ).collect();
-      if (existing.some((w) => w.externalId === args.externalId && w.status === "processed")) {
+      ).order("desc").take(500);
+      if (recent.some((w) => w.externalId === args.externalId && w.status === "processed")) {
         return { duplicated: true };
       }
     }

@@ -56,7 +56,7 @@ export const get = query({
     const s = await requireOrg(ctx);
     const lead = await ctx.db.get(args.id);
     if (!lead || lead.orgId !== s.orgId) throw new ConvexError("Lead not found.");
-    const tasks = await ctx.db.query("tasks").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).collect();
+    const tasks = await ctx.db.query("tasks").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).take(2000);
     const convos = await ctx.db.query("conversations").withIndex("by_org_entity", (q) =>
       q.eq("orgId", s.orgId).eq("entityType", "lead").eq("entityId", args.id),
     ).collect();

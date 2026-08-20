@@ -61,6 +61,13 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const s = await requireWrite(ctx);
     const input = args.input;
+    // Validate coordinates if provided
+    if (input.lat !== undefined && input.lat !== null) {
+      if (!Number.isFinite(input.lat) || input.lat < -90 || input.lat > 90) throw new ConvexError("Latitude must be between -90 and 90.");
+    }
+    if (input.lon !== undefined && input.lon !== null) {
+      if (!Number.isFinite(input.lon) || input.lon < -180 || input.lon > 180) throw new ConvexError("Longitude must be between -180 and 180.");
+    }
     const carrier = await ctx.db.get(input.carrierId);
     if (!carrier || carrier.orgId !== s.orgId) throw new ConvexError("Carrier not found.");
     const id = await ctx.db.insert("trucks", {

@@ -21,11 +21,12 @@ export const listConversations = query({
   handler: async (ctx) => {
     const s = await requireOrg(ctx);
     const rows = await ctx.db.query("aiConversations").withIndex("by_org_user_recent", (q) => q.eq("orgId", s.orgId).eq("userId", s.userId)).order("desc").take(50);
-    const all = await ctx.db.query("aiMessages").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).collect();
-    return rows.map((c) => ({
-      ...c,
-      messageCount: all.filter((m) => m.conversationId === c._id).length,
+    // Count messages per conversation using bounded per-conversation queries
+    const enriched = await Promise.all(rows.map(async (c) => {
+      const msgs = await ctx.db.query("aiMessages").withIndex("by_conversation", (q) => q.eq("conversationId", c._id)).take(200);
+      return { ...c, messageCount: msgs.length };
     }));
+    return enriched;
   },
 });
 

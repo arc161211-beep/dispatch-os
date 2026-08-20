@@ -82,7 +82,7 @@ export const update = mutation({
 export const setStatus = mutation({
   args: { id: v.id("tasks"), status: v.union(...TASK_STATUSES.map((t) => v.literal(t))) },
   handler: async (ctx, args) => {
-    const s = await requireOrg(ctx);
+    const s = await requireWrite(ctx);
     const task = await ctx.db.get(args.id);
     if (!task || task.orgId !== s.orgId) throw new ConvexError("Task not found.");
     await ctx.db.patch(args.id, {

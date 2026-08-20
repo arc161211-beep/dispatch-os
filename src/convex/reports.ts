@@ -7,8 +7,10 @@ function round2(n: number) {
   return Math.round(n * 100) / 100;
 }
 
+/** Bounded collection — never loads more than 2000 records per table. */
+const REPORT_LIMIT = 2000;
 async function collectAll(ctx: any, table: string, orgId: string) {
-  return (ctx.db.query(table).withIndex("by_org", (q: any) => q.eq("orgId", orgId)) as any).collect();
+  return (ctx.db.query(table).withIndex("by_org", (q: any) => q.eq("orgId", orgId)) as any).take(REPORT_LIMIT);
 }
 
 export const operations = query({

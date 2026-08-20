@@ -60,11 +60,13 @@ export const unreadStats = query({
   args: {},
   handler: async (ctx) => {
     const s = await requireOrg(ctx);
-    // Bounded: scan at most 500 messages for unread stats
-    const messages = await ctx.db.query("messages").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).take(500);
+    // Use indexed queries for each status — bounded to prevent unbounded scans
+    const unread = await ctx.db.query("messages").withIndex("by_org_status", (q) => q.eq("orgId", s.orgId).eq("status", "unread")).take(200);
+    const needsReply = await ctx.db.query("messages").withIndex("by_org_status", (q) => q.eq("orgId", s.orgId).eq("status", "needs_reply")).take(200);
+    const allUnread = [...unread, ...needsReply];
     return {
-      unread: messages.filter((m) => m.status === "unread" || m.status === "needs_reply").length,
-      urgent: messages.filter((m) => m.priority === "urgent" && (m.status === "unread" || m.status === "needs_reply")).length,
+      unread: allUnread.length,
+      urgent: allUnread.filter((m) => m.priority === "urgent").length,
     };
   },
 });

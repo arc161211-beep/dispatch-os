@@ -205,6 +205,9 @@ export const updateTruckLocation = mutation({
     accuracy: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    // Validate coordinates are within valid range
+    if (args.lat < -90 || args.lat > 90) throw new ConvexError("Latitude must be between -90 and 90.");
+    if (args.lon < -180 || args.lon > 180) throw new ConvexError("Longitude must be between -180 and 180.");
     const s = await requireOrg(ctx);
     const truck = await ctx.db.get(args.truckId);
     if (!truck || truck.orgId !== s.orgId) throw new ConvexError("Truck not found.");
@@ -259,6 +262,9 @@ export const updateDriverLocation = mutation({
     accuracy: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    // Validate coordinates are within valid range
+    if (args.lat < -90 || args.lat > 90) throw new ConvexError("Latitude must be between -90 and 90.");
+    if (args.lon < -180 || args.lon > 180) throw new ConvexError("Longitude must be between -180 and 180.");
     const s = await requireOrg(ctx);
     const driver = await ctx.db.get(args.driverId);
     if (!driver || driver.orgId !== s.orgId) throw new ConvexError("Driver not found.");
@@ -320,6 +326,9 @@ export const bulkUpdateLocations = mutation({
     let updated = 0;
 
     for (const update of args.updates) {
+      // Validate coordinates are within valid range
+      if (update.lat < -90 || update.lat > 90) continue;
+      if (update.lon < -180 || update.lon > 180) continue;
       if (update.entityType === "truck") {
         const truck = await ctx.db.get(update.entityId as Id<"trucks">);
         if (!truck || truck.orgId !== s.orgId) continue;
