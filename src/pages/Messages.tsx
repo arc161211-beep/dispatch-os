@@ -2,12 +2,12 @@ import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
-import { useCanWrite, useTimezone } from "@/hooks/use-app";
+import { useCanWrite } from "@/hooks/use-app";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { PageHeader, StatusBadge, LoadingState, EmptyState, errorMessage } from "@/components/app/shared";
-import { Field, TextArea, SelectInput } from "@/components/app/forms";
-import { fmtDateTime, fmtRelative } from "@/lib/dates";
+import { PageHeader, LoadingState, EmptyState, errorMessage } from "@/components/app/shared";
+import { SelectInput } from "@/components/app/forms";
+import { fmtRelative } from "@/lib/dates";
 import { MessageSquare, Send, ArrowLeft, CheckCircle2, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -15,7 +15,6 @@ type Conversation = any;
 type Message = any;
 
 export default function Messages() {
-  const tz = useTimezone();
   const canWrite = useCanWrite();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const conversations = useQuery(api.messages.listConversations, {});
@@ -25,6 +24,15 @@ export default function Messages() {
 
   const [replyBody, setReplyBody] = useState("");
   const [replyChannel, setReplyChannel] = useState("internal");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState<"" | "urgent" | "high" | "normal">("");
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const handleSend = async () => {
     if (!selectedId || !replyBody.trim()) return;
@@ -39,7 +47,7 @@ export default function Messages() {
     setSelectedId(id);
     const conv = conversations?.find((c) => c._id === id);
     if (conv && conv.unread > 0) {
-      try { await markRead({ conversationId: id as any }); } catch {}
+      try { await markRead({ conversationId: id as any }); } catch { /* noop */ }
     }
   };
 
@@ -85,16 +93,6 @@ export default function Messages() {
       </div>
     );
   }
-
-  const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [priorityFilter, setPriorityFilter] = useState<"" | "urgent" | "high" | "normal">("");
-
-  // Debounce search
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
 
   const filteredConversations = (conversations ?? []).filter((c: Conversation) => {
     const matchesSearch = !debouncedSearch ||

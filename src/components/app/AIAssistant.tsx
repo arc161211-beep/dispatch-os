@@ -58,7 +58,8 @@ export function AIAssistant({
     try {
       // Prepend system context if provided
       const fullMessage = systemContext ? `[Context: ${systemContext}] ${msg}` : msg;
-      const result = await chat({ message: fullMessage, conversationId: conversationId as string | undefined });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await chat({ message: fullMessage, conversationId: (conversationId ?? undefined) as any });
 
       if (!result.configured) {
         setMessages((prev) => [

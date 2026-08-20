@@ -55,7 +55,7 @@ export function downloadCsv(filename: string, headers: string[], rows: (string |
 }
 
 export function csvNumber(v: string | undefined): number | undefined {
-  const n = Number((v ?? "").replace(/[^0-9.\-]/g, ""));
+  const n = Number((v ?? "").replace(/[^0-9.-]/g, ""));
   return Number.isFinite(n) && v !== undefined && v.trim() !== "" ? n : undefined;
 }
 
