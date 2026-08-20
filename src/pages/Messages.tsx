@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
@@ -91,13 +91,10 @@ export default function Messages() {
   const [priorityFilter, setPriorityFilter] = useState<"" | "urgent" | "high" | "normal">("");
 
   // Debounce search
-  useState(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    if (searchQuery !== debouncedSearch) {
-      timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
-    }
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
     return () => clearTimeout(timer);
-  });
+  }, [searchQuery]);
 
   const filteredConversations = (conversations ?? []).filter((c: Conversation) => {
     const matchesSearch = !debouncedSearch ||
