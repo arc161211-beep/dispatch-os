@@ -1,7 +1,5 @@
 import { useEffect, useRef, useMemo } from "react";
-import { Link } from "react-router";
-import { MapPin, Clock, Truck as TruckIcon, Navigation } from "lucide-react";
-import { StatusBadge } from "@/components/app/shared";
+import { MapPin } from "lucide-react";
 import { fmtDateTime } from "@/lib/dates";
 import type { ReactNode } from "react";
 

@@ -5,7 +5,7 @@ import { api } from "@/convex/_generated/api";
 import { DOCUMENT_TYPES, DOC_ALLOWED_EXTENSIONS, DOC_MAX_BYTES } from "@/convex/constants";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Field, Grid, SelectInput, TextArea, TextInput } from "@/components/app/forms";
+import { Field, Grid, SelectInput, TextArea } from "@/components/app/forms";
 import { errorMessage } from "@/components/app/shared";
 import { Upload, FileUp } from "lucide-react";
 

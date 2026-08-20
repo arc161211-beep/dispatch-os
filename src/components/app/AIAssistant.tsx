@@ -3,7 +3,6 @@ import { useAction, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Send, Bot, User, AlertTriangle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -59,7 +58,7 @@ export function AIAssistant({
     try {
       // Prepend system context if provided
       const fullMessage = systemContext ? `[Context: ${systemContext}] ${msg}` : msg;
-      const result = await chat({ message: fullMessage, conversationId: conversationId as any });
+      const result = await chat({ message: fullMessage, conversationId: conversationId as string | undefined });
 
       if (!result.configured) {
         setMessages((prev) => [

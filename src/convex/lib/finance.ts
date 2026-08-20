@@ -120,7 +120,7 @@ export function round2(n: number): number {
 /** Convert a user-entered dollar string ("2,500.50") to integer cents. */
 export function dollarsToCents(input: string | number | null | undefined): number | null {
   if (input === null || input === undefined || input === "") return null;
-  const cleaned = String(input).replace(/[^0-9.\-]/g, "");
+  const cleaned = String(input).replace(/[^0-9.-]/g, "");
   if (!cleaned || cleaned === "." || cleaned === "-") return null;
   const n = Number(cleaned);
   if (!Number.isFinite(n)) return null;
