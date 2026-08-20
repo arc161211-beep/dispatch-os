@@ -18,6 +18,19 @@ async function loadLeaflet() {
 }
 
 // ---------------------------------------------------------------------------
+// XSS-safe HTML escaping — never inject raw database values into popups
+// ---------------------------------------------------------------------------
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -120,19 +133,19 @@ export function TruckMap({ trucks, height = "h-80", className, emptyState, onTru
         marker.bindPopup(`
           <div style="min-width:200px;font-family:system-ui,sans-serif">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-              <strong style="font-size:14px">${truck.unitNumber}${truck.type ? ` (${truck.type})` : ""}</strong>
-              <span style="font-size:11px;padding:2px 8px;border-radius:9999px;background:${isLive ? "#dcfce7" : "#fef3c7"};color:${isLive ? "#166534" : "#92400e"}">${statusLabel}</span>
+              <strong style="font-size:14px">${escapeHtml(truck.unitNumber)}${truck.type ? ` (${escapeHtml(truck.type)})` : ""}</strong>
+              <span style="font-size:11px;padding:2px 8px;border-radius:9999px;background:${isLive ? "#dcfce7" : "#fef3c7"};color:${isLive ? "#166534" : "#92400e"}">${escapeHtml(statusLabel)}</span>
             </div>
-            ${truck.driverName ? `<div style="font-size:12px;color:#6b7280;margin-bottom:4px">Driver: ${truck.driverName}</div>` : ""}
+            ${truck.driverName ? `<div style="font-size:12px;color:#6b7280;margin-bottom:4px">Driver: ${escapeHtml(truck.driverName)}</div>` : ""}
             <div style="font-size:12px;color:#6b7280;margin-bottom:4px">
-              <span style="color:#6b7280">📍</span> ${locationLabel}
+              <span style="color:#6b7280">📍</span> ${escapeHtml(locationLabel)}
             </div>
             <div style="font-size:11px;color:#9ca3af;display:flex;align-items:center;gap:4px">
-              <span>${isLive ? "🟢" : "🟡"}</span> ${timeLabel}${sourceLabel}
-              ${truck.accuracy ? ` · ±${Math.round(truck.accuracy)}m` : ""}
+              <span>${isLive ? "🟢" : "🟡"}</span> ${escapeHtml(timeLabel)}${escapeHtml(sourceLabel)}
+              ${truck.accuracy ? ` · \u00B1${Math.round(truck.accuracy)}m` : ""}
             </div>
             <div style="margin-top:8px">
-              <a href="/trucks/${truck.truckId}" style="font-size:12px;color:#2563eb;text-decoration:underline">View truck details →</a>
+              <a href="/trucks/${encodeURIComponent(truck.truckId)}" style="font-size:12px;color:#2563eb;text-decoration:underline">View truck details \u2192</a>
             </div>
           </div>
         `);

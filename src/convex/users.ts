@@ -6,6 +6,7 @@ import { audit } from "./lib/audit";
 import { requireAdmin, requireOrg } from "./lib/context";
 import { validEmail } from "./lib/validation";
 import { ACCOUNT_STATUSES, ROLES, Role } from "./constants";
+import { checkRateLimit, INVITE_LIMIT, PROVISION_LIMIT } from "./lib/rateLimit";
 
 /** Invitation token expiry: 7 days */
 const INVITE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
@@ -50,6 +51,13 @@ export const provision = mutation({
       // Stamp last login time for admin visibility.
       await ctx.db.patch(userId, { lastLoginAt: Date.now() });
       return { status: "ready" as const };
+    }
+
+    // Rate limit: prevent repeated provisioning attempts
+    const rateLimitKey = `provision:${userId}`;
+    const rateCheck = checkRateLimit(rateLimitKey, PROVISION_LIMIT.maxAttempts, PROVISION_LIMIT.windowMs);
+    if (!rateCheck.allowed) {
+      throw new ConvexError(`Too many attempts. Please try again in ${Math.ceil(rateCheck.retryAfterMs / 60000)} minutes.`);
     }
 
     const email = user.email?.toLowerCase().trim();
@@ -212,6 +220,12 @@ export const createUser = mutation({
     if (!email) throw new ConvexError("A valid email is required.");
     if (!args.name.trim()) throw new ConvexError("Name is required.");
 
+    // Rate limit: prevent invitation spam
+    const rateCheck = checkRateLimit(`invite:${s.userId}`, INVITE_LIMIT.maxAttempts, INVITE_LIMIT.windowMs);
+    if (!rateCheck.allowed) {
+      throw new ConvexError(`Too many invitations. Please try again in ${Math.ceil(rateCheck.retryAfterMs / 60000)} minutes.`);
+    }
+
     // Check if email already has a pending invite
     const existingInvite = await ctx.db
       .query("pendingUsers")
@@ -272,6 +286,12 @@ export const inviteUser = mutation({
     const s = await requireAdmin(ctx);
     const email = validEmail(args.email);
     if (!email) throw new ConvexError("A valid email is required.");
+
+    // Rate limit: prevent invitation spam
+    const rateCheck = checkRateLimit(`invite:${s.userId}`, INVITE_LIMIT.maxAttempts, INVITE_LIMIT.windowMs);
+    if (!rateCheck.allowed) {
+      throw new ConvexError(`Too many invitations. Please try again in ${Math.ceil(rateCheck.retryAfterMs / 60000)} minutes.`);
+    }
 
     // Check for existing invite (pending or accepted)
     const existing = await ctx.db

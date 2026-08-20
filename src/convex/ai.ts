@@ -17,6 +17,7 @@ import type { Id } from "./_generated/dataModel";
 import { api } from "./_generated/api";
 import { audit } from "./lib/audit";
 import { requireWrite, Session } from "./lib/context";
+import { filterLoadFinancials, filterInvoiceFinancials, getFinancialVisibility, requiresFinancialFiltering } from "./lib/visibility";
 
 const SYSTEM_PROMPT = `You are the operations assistant inside DispatchOS, a freight dispatch management platform used by a solo dispatcher (or small dispatch agency). You help find loads, analyze rates, coordinate trucks/drivers/carriers/brokers, track documents, and manage follow-ups.
 
@@ -111,7 +112,12 @@ const pick = (obj: Record<string, unknown>, keys: string[]) => {
   return out;
 };
 
-async function runTool(ctx: any, name: string, args: Record<string, unknown>): Promise<{ ok: boolean; summary: string; suggestion?: unknown }> {
+async function runTool(ctx: any, name: string, args: Record<string, unknown>, session?: Session): Promise<{ ok: boolean; summary: string; suggestion?: unknown }> {
+  const s = session ?? null;
+  let visMode: "full" | "rate_only" | "fee_visible" | "none" | undefined;
+  if (s && requiresFinancialFiltering(s.role)) {
+    visMode = await getFinancialVisibility(ctx, s.orgId);
+  }
   switch (name) {
     case "getTrucks": {
       const rows = await ctx.runQuery(api.trucks.list, { availability: (args.availability as string) || undefined });
@@ -119,7 +125,10 @@ async function runTool(ctx: any, name: string, args: Record<string, unknown>): P
     }
     case "getLoads": {
       const rows = await ctx.runQuery(api.loads.list, { status: (args.status as string) || undefined, limit: 100 });
-      return { ok: true, summary: JSON.stringify(rows.map((l: any) => pick(l, ["loadNumber", "status", "origin", "destination", "pickupDate", "deliveryDate", "grossRateCents", "rpm", "carrierId", "truckId"]))) };
+      return { ok: true, summary: JSON.stringify(rows.map((l: any) => {
+        const filtered = s && requiresFinancialFiltering(s.role) && visMode ? filterLoadFinancials(l, visMode) : l;
+        return pick(filtered, ["loadNumber", "status", "origin", "destination", "pickupDate", "deliveryDate", "grossRateCents", "rpm", "carrierId", "truckId"]);
+      })) };
     }
     case "getCarriers": {
       const rows = await ctx.runQuery(api.carriers.list, {});
@@ -147,7 +156,10 @@ async function runTool(ctx: any, name: string, args: Record<string, unknown>): P
     }
     case "getInvoices": {
       const rows = await ctx.runQuery(api.invoices.list, { status: (args.status as string) || undefined });
-      return { ok: true, summary: JSON.stringify(rows.map((i: any) => pick(i, ["invoiceNumber", "status", "amountCents", "paidCents", "dueDate", "carrierName"]))) };
+      return { ok: true, summary: JSON.stringify(rows.map((i: any) => {
+        const filtered = s && requiresFinancialFiltering(s.role) && visMode ? filterInvoiceFinancials(i, visMode) : i;
+        return pick(filtered, ["invoiceNumber", "status", "amountCents", "paidCents", "dueDate", "carrierName"]);
+      })) };
     }
     case "getSummary": {
       const s = await ctx.runQuery(api.dashboard.summary, {});
@@ -265,7 +277,7 @@ export const chat = action({
             } catch {
               parsed = {};
             }
-            const result = await runTool(ctx, tc.function.name, parsed);
+            const result = await runTool(ctx, tc.function.name, parsed, s);
             toolCalls.push({ name: tc.function.name, args: parsed, summary: result.summary.slice(0, 3000) });
             if (result.suggestion) suggestedAction = result.suggestion as { type: string; payload: Record<string, unknown> };
             messages.push({ role: "assistant", content: `[tool: ${tc.function.name}]` });
@@ -379,7 +391,7 @@ export const generateDailySummary = action({
   handler: async (ctx) => {
     const s = await getSessionForAction(ctx);
     const cfg = await aiConfig();
-    const summary = await ctx.runQuery(api.dashboard.summary, {});
+    const summary: any = await ctx.runQuery(api.dashboard.summary, {});
     if (!cfg.configured) return { configured: false, text: null };
     try {
       const res = await chatCompletion({

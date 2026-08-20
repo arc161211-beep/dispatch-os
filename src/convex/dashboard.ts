@@ -1,6 +1,7 @@
 import { query } from "./_generated/server";
 import { loadScope, requireOrg } from "./lib/context";
 import { TERMINAL_LOAD_STATUSES, LoadStatus } from "./constants";
+import { requiresFinancialFiltering, getFinancialVisibility } from "./lib/visibility";
 
 function tzToday(tz: string, dayOffset = 0): { start: number; end: number } {
   const parts = new Intl.DateTimeFormat("en-US", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
@@ -137,6 +138,34 @@ export const summary = query({
       .sort((a, b) => b._creationTime - a._creationTime)
       .slice(0, 5);
 
+    const finance = {
+      grossBookedCents,
+      dispatcherRevenueCents,
+      outstandingFeesCents,
+      paidFeesCents,
+      overdueInvoices: overdueInvoices.length,
+      totalInvoiceCents: invoices.reduce((sum, i) => sum + i.amountCents, 0),
+    };
+
+    // Financial visibility: strip finance fields for carrier_scoped users
+    if (requiresFinancialFiltering(s.role)) {
+      const vis = await getFinancialVisibility(ctx, s.orgId);
+      if (vis === "none") {
+        finance.grossBookedCents = 0;
+        finance.dispatcherRevenueCents = 0;
+        finance.outstandingFeesCents = 0;
+        finance.paidFeesCents = 0;
+        finance.overdueInvoices = 0;
+        finance.totalInvoiceCents = 0;
+        clientRequests.length = 0;
+      } else if (vis === "rate_only") {
+        finance.dispatcherRevenueCents = 0;
+        finance.outstandingFeesCents = 0;
+        finance.paidFeesCents = 0;
+        finance.overdueInvoices = 0;
+      }
+    }
+
     return {
       ops: {
         activeCarriers: carriers.filter((c) => c.status === "Active").length,
@@ -151,14 +180,7 @@ export const summary = query({
         urgentIssues: urgentMessages.length + missingPod.length + overdueTasks.length + overdueInvoices.length,
         availableDrivers: drivers.filter((d) => d.availability === "Available").length,
       },
-      finance: {
-        grossBookedCents,
-        dispatcherRevenueCents,
-        outstandingFeesCents,
-        paidFeesCents,
-        overdueInvoices: overdueInvoices.length,
-        totalInvoiceCents: invoices.reduce((sum, i) => sum + i.amountCents, 0),
-      },
+      finance,
       attention: {
         urgentMessages,
         missingPod,

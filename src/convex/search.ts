@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { loadScope, requireOrg } from "./lib/context";
+import { filterLoadFinancials, getFinancialVisibility, requiresFinancialFiltering } from "./lib/visibility";
 
 /** Max records to scan per entity type before stopping. */
 const SCAN_LIMIT = 100;
@@ -15,6 +16,12 @@ export const globalSearch = query({
     if (q.length < 2) return [];
 
     const results: { type: string; label: string; sub: string; id: string; route: string }[] = [];
+
+    // Load financial visibility once for efficiency
+    let visMode: "full" | "rate_only" | "fee_visible" | "none" | undefined;
+    if (requiresFinancialFiltering(s.role)) {
+      visMode = await getFinancialVisibility(ctx, s.orgId);
+    }
 
     // Early termination: stop scanning each entity once we have enough results
     const carriers = await ctx.db.query("carriers").withIndex("by_org", (q2) => q2.eq("orgId", s.orgId)).take(SCAN_LIMIT);
@@ -70,6 +77,8 @@ export const globalSearch = query({
         (l.destination ?? "").toLowerCase().includes(q) ||
         (l.externalId ?? "").toLowerCase().includes(q)
       ) {
+        // Financial visibility: filter financial fields from search results
+        const display = visMode ? filterLoadFinancials(l, visMode) : l;
         results.push({ type: "Load", label: l.loadNumber, sub: `${l.origin ?? "?"} → ${l.destination ?? "?"} · ${l.status}`, id: l._id, route: `/loads/${l._id}` });
         if (results.length >= limit) return results;
       }
@@ -79,7 +88,9 @@ export const globalSearch = query({
     for (const i of invoices) {
       if (scope.carrierId && i.carrierId !== scope.carrierId) continue;
       if (i.invoiceNumber.toLowerCase().includes(q)) {
-        results.push({ type: "Invoice", label: i.invoiceNumber, sub: `$${(i.amountCents / 100).toFixed(2)} · ${i.status}`, id: i._id, route: "/finance" });
+        // Financial visibility: hide payment details for restricted carriers
+        const amountDisplay = visMode === "none" ? "•••" : `$${(i.amountCents / 100).toFixed(2)}`;
+        results.push({ type: "Invoice", label: i.invoiceNumber, sub: `${amountDisplay} · ${i.status}`, id: i._id, route: "/finance" });
         if (results.length >= limit) return results;
       }
     }

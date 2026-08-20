@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { loadScope, requireOrg } from "./lib/context";
 import { TERMINAL_LOAD_STATUSES, LoadStatus } from "./constants";
+import { getFinancialVisibility, requiresFinancialFiltering } from "./lib/visibility";
 
 function round2(n: number) {
   return Math.round(n * 100) / 100;

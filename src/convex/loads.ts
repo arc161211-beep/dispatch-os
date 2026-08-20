@@ -6,6 +6,7 @@ import { audit } from "./lib/audit";
 import { loadScope, requireOrg, requireWrite } from "./lib/context";
 import { deriveLoadFinance } from "./lib/finance";
 import { optString, parseTags, positiveNumber, reqString, safeDate } from "./lib/validation";
+import { filterLoadFinancials, getFinancialVisibility, requiresFinancialFiltering } from "./lib/visibility";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -154,7 +155,12 @@ export const list = query({
       );
     }
     loads.sort((a, b) => b._creationTime - a._creationTime);
-    return loads.slice(0, args.limit ?? 300);
+    const sliced = loads.slice(0, args.limit ?? 300);
+    if (requiresFinancialFiltering(s.role)) {
+      const vis = await getFinancialVisibility(ctx, s.orgId);
+      return sliced.map((l) => filterLoadFinancials(l, vis));
+    }
+    return sliced;
   },
 });
 
@@ -163,10 +169,16 @@ export const get = query({
   handler: async (ctx, args) => {
     const s = await requireOrg(ctx);
     const scope = loadScope(s);
-    const load = await ctx.db.get(args.id);
-    if (!load || load.orgId !== s.orgId) throw new ConvexError("Load not found.");
-    if (scope.carrierId && load.carrierId !== scope.carrierId) throw new ConvexError("Load not found.");
-    if (scope.driverId && load.driverId !== scope.driverId) throw new ConvexError("Load not found.");
+    let loadRecord = await ctx.db.get(args.id);
+    if (!loadRecord || loadRecord.orgId !== s.orgId) throw new ConvexError("Load not found.");
+    if (scope.carrierId && loadRecord.carrierId !== scope.carrierId) throw new ConvexError("Load not found.");
+    if (scope.driverId && loadRecord.driverId !== scope.driverId) throw new ConvexError("Load not found.");
+
+    if (requiresFinancialFiltering(s.role)) {
+      const vis = await getFinancialVisibility(ctx, s.orgId);
+      loadRecord = filterLoadFinancials(loadRecord, vis) as typeof loadRecord;
+    }
+    const load = loadRecord;
 
     const [broker, shipper, carrier, truck, driver, statusHistory, rateHistory, documents, invoices, conversations] = await Promise.all([
       load.brokerId ? ctx.db.get(load.brokerId) : null,

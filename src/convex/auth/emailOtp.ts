@@ -16,6 +16,12 @@ export const emailOtp = Email({
     return generateRandomString(random, alphabet, 6);
   },
   async sendVerificationRequest({ identifier: email, token }) {
+    const apiKey = process.env.VLY_AUTH_API_KEY;
+    if (!apiKey) {
+      // SECURITY: Never hardcode secrets. If the env var is missing,
+      // authentication cannot proceed — do NOT fall back to a hardcoded key.
+      throw new Error("Email OTP is not configured. Missing VLY_AUTH_API_KEY environment variable.");
+    }
     try {
       await axios.post(
         "https://auth.freebuff.app/send_otp",
@@ -26,7 +32,7 @@ export const emailOtp = Email({
         },
         {
           headers: {
-            "x-api-key": "fb_email_2crN1hqIArZP2bEfvjp5Qik4",
+            "x-api-key": apiKey,
           },
         },
       );

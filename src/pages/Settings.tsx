@@ -97,6 +97,8 @@ export default function SettingsPage() {
         )}
       </form>
 
+      {canAdmin && <AdminSections settings={settings} />}
+
       {canAdmin && (
         <SectionCard title="Demo data" description="Load or clear sample data for testing.">
           <div className="flex gap-3">
@@ -118,6 +120,123 @@ export default function SettingsPage() {
 // ---------------------------------------------------------------------------
 // Notification Preferences (per-user)
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Admin-only sections: Financial Visibility & Data Retention
+// ---------------------------------------------------------------------------
+
+function AdminSections({ settings }: { settings: any }) {
+  const updateSettings = useMutation(api.settings.update);
+  const [busy, setBusy] = useState(false);
+
+  const handleVisibilitySave = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault(); setBusy(true);
+    const fd = new FormData(e.currentTarget);
+    try {
+      await updateSettings({
+        carrierFinancialVisibility: (fd.get("carrierFinancialVisibility") as string || "none") as any,
+      });
+      toast.success("Financial visibility updated.");
+    } catch (e) { toast.error(errorMessage(e)); } finally { setBusy(false); }
+  };
+
+  const handleRetentionSave = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault(); setBusy(true);
+    const fd = new FormData(e.currentTarget);
+    try {
+      await updateSettings({
+        dataRetention: {
+          locationHistoryDays: fd.get("locationHistoryDays") ? Number(fd.get("locationHistoryDays")) : undefined,
+          messageRetentionDays: fd.get("messageRetentionDays") ? Number(fd.get("messageRetentionDays")) : undefined,
+          auditLogRetentionDays: fd.get("auditLogRetentionDays") ? Number(fd.get("auditLogRetentionDays")) : undefined,
+        },
+      });
+      toast.success("Retention settings updated.");
+    } catch (e) { toast.error(errorMessage(e)); } finally { setBusy(false); }
+  };
+
+  const visOptions = [
+    { value: "none", label: "No Financial Details", desc: "Carrier sees no financial data (most restrictive)" },
+    { value: "rate_only", label: "Load Rate Only", desc: "Carrier sees gross rate but not dispatcher fee" },
+    { value: "fee_visible", label: "Dispatcher Fee Visible", desc: "Carrier sees gross rate and dispatcher fee" },
+    { value: "full", label: "Full", desc: "Carrier sees all financial fields" },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <form onSubmit={handleVisibilitySave}>
+        <SectionCard title="Carrier Financial Visibility" description="Control what financial data carrier clients can see in their portal and AI tools.">
+          <div className="space-y-3">
+            {visOptions.map((opt) => (
+              <label key={opt.value} className="flex items-start gap-3 cursor-pointer">
+                <input type="radio" name="carrierFinancialVisibility" value={opt.value}
+                  defaultChecked={(settings.carrierFinancialVisibility ?? "none") === opt.value}
+                  className="mt-0.5" />
+                <div>
+                  <span className="text-sm font-medium">{opt.label}</span>
+                  <p className="text-xs text-muted-foreground">{opt.desc}</p>
+                </div>
+              </label>
+            ))}
+          </div>
+          <div className="flex justify-end mt-4">
+            <Button type="submit" disabled={busy} size="sm" className="gap-1.5"><Save className="size-3" /> Save</Button>
+          </div>
+        </SectionCard>
+      </form>
+
+      <form onSubmit={handleRetentionSave}>
+        <SectionCard title="Data Retention" description="Automatically clean up old records. Set to 0 or leave empty to disable. Cleanup runs when triggered by an admin.">
+          <Grid>
+            <Field label="Location history (days)">
+              <TextInput name="locationHistoryDays" type="number" min="0"
+                defaultValue={settings.dataRetention?.locationHistoryDays ?? ""} placeholder="e.g. 90" />
+              <p className="text-xs text-muted-foreground mt-1">Delete location records older than this. 0 = keep forever.</p>
+            </Field>
+            <Field label="Message retention (days)">
+              <TextInput name="messageRetentionDays" type="number" min="0"
+                defaultValue={settings.dataRetention?.messageRetentionDays ?? ""} placeholder="e.g. 365" />
+              <p className="text-xs text-muted-foreground mt-1">Delete messages older than this. 0 = keep forever.</p>
+            </Field>
+            <Field label="Audit log retention (days)">
+              <TextInput name="auditLogRetentionDays" type="number" min="0"
+                defaultValue={settings.dataRetention?.auditLogRetentionDays ?? ""} placeholder="e.g. 730" />
+              <p className="text-xs text-muted-foreground mt-1">Delete audit logs older than this. Check legal requirements before setting.</p>
+            </Field>
+          </Grid>
+          <div className="flex justify-end mt-4">
+            <Button type="submit" disabled={busy} size="sm" className="gap-1.5"><Save className="size-3" /> Save</Button>
+          </div>
+        </SectionCard>
+      </form>
+
+      <SectionCard title="External Integrations" description="Configure third-party services. All show 'Not Configured' until set up.">
+        <div className="space-y-2">
+          {[
+            { name: "AI (NVIDIA Nemotron)", status: process.env.NVIDIA_API_KEY ? "Configured" : "Not Configured", note: "Powers the AI assistant, message classification, and daily summaries" },
+            { name: "Email (OTP / Notifications)", status: process.env.VLY_AUTH_API_KEY ? "Configured" : "Not Configured", note: "Sends OTP codes and optional email notifications" },
+            { name: "SMS / WhatsApp", status: "Not Configured", note: "Requires external integration — set up in Integrations page" },
+            { name: "Maps & Routing", status: "Not Configured", note: "Currently using OpenStreetMap (free). Premium routing requires API key" },
+            { name: "Load Board", status: "Not Configured", note: "Requires external integration — set up in Integrations page" },
+            { name: "Payments Gateway", status: "Not Configured", note: "Requires external integration — set up in Integrations page" },
+            { name: "E-Signature", status: "Not Configured", note: "Requires external integration — set up in Integrations page" },
+            { name: "GPS / Telematics", status: "Not Configured", note: "Requires external integration — set up in Integrations page" },
+          ].map((item) => (
+            <div key={item.name} className="flex items-center justify-between py-2 border-b last:border-0">
+              <div>
+                <p className="text-sm font-medium">{item.name}</p>
+                <p className="text-xs text-muted-foreground">{item.note}</p>
+              </div>
+              <span className={`text-xs px-2 py-0.5 rounded-full ${item.status === "Configured" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                {item.status}
+              </span>
+            </div>
+          ))}
+        </div>
+      </SectionCard>
+    </div>
+  );
+}
 
 function NotificationPrefsCard() {
   const prefsData = useQuery(api.settings.getUserNotificationPrefs);

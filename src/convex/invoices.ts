@@ -3,6 +3,7 @@ import { mutation, query } from "./_generated/server";
 import { INVOICE_STATUSES } from "./constants";
 import { audit } from "./lib/audit";
 import { loadScope, requireOrg, requireWrite } from "./lib/context";
+import { filterInvoiceFinancials, getFinancialVisibility, requiresFinancialFiltering } from "./lib/visibility";
 
 const ACTIVE_INVOICE_STATUSES = ["Draft", "Sent", "Viewed", "Partially Paid", "Overdue", "Disputed"];
 
@@ -31,12 +32,17 @@ export const list = query({
       const c = await ctx.db.get(cid as never);
       if (c) carriers.set(cid as string, (c as { companyName: string }).companyName);
     }
-    return invoices.slice(0, args.limit ?? 300).map((i) => ({
+    const mapped = invoices.slice(0, args.limit ?? 300).map((i) => ({
       ...i,
       effectiveStatus: effectiveStatus(i),
       carrierName: i.carrierId ? carriers.get(i.carrierId) ?? "" : "",
       outstandingCents: Math.max(0, i.amountCents - i.paidCents),
     }));
+    if (requiresFinancialFiltering(s.role)) {
+      const vis = await getFinancialVisibility(ctx, s.orgId);
+      return mapped.map((i) => filterInvoiceFinancials(i, vis));
+    }
+    return mapped;
   },
 });
 
@@ -51,12 +57,17 @@ export const get = query({
       invoice.carrierId ? ctx.db.get(invoice.carrierId) : null,
       invoice.loadId ? ctx.db.get(invoice.loadId) : null,
     ]);
-    return {
+    const result = {
       invoice: { ...invoice, effectiveStatus: effectiveStatus(invoice) },
       payments,
       carrierName: carrier ? (carrier as { companyName: string }).companyName : "",
       loadNumber: load ? (load as { loadNumber: string }).loadNumber : "",
     };
+    if (requiresFinancialFiltering(s.role)) {
+      const vis = await getFinancialVisibility(ctx, s.orgId);
+      result.invoice = filterInvoiceFinancials(result.invoice, vis);
+    }
+    return result;
   },
 });
 
