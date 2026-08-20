@@ -116,7 +116,7 @@ export const markAllRead = mutation({
   args: {},
   handler: async (ctx) => {
     const s = await requireOrg(ctx);
-    const items = await ctx.db.query("notifications").withIndex("by_org_user", (q) => q.eq("orgId", s.orgId).eq("userId", s.userId)).collect();
+    const items = await ctx.db.query("notifications").withIndex("by_org_user", (q) => q.eq("orgId", s.orgId).eq("userId", s.userId)).take(1000);
     for (const n of items) {
       if (!n.readAt) await ctx.db.patch(n._id, { readAt: Date.now() });
     }

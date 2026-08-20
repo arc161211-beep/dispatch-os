@@ -163,6 +163,60 @@ export const remove = mutation({
 });
 
 /** Standard per-load document checklist (Rate Confirmation, BOL, POD). */
+const EXPIRY_NOTIFICATION_DAYS = 30;
+
+/**
+ * Create notifications for documents expiring soon. Safe to call repeatedly —
+ * only creates a notification if no existing unread notification references
+ * the same document within the expiry window.
+ * Can be triggered by admin action or a scheduled cron.
+ */
+export const notifyExpiringSoon = mutation({
+  args: { withinDays: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const s = await requireWrite(ctx);
+    const days = args.withinDays ?? EXPIRY_NOTIFICATION_DAYS;
+    const cutoff = Date.now() + days * 86_400_000;
+
+    const docs = await ctx.db
+      .query("documents")
+      .withIndex("by_org_expires", (q) => q.eq("orgId", s.orgId).lte("expiresAt", cutoff))
+      .collect();
+
+    const expiring = docs.filter((d) => d.expiresAt && d.expiresAt > Date.now() && d.status !== "superseded");
+    let created = 0;
+
+    for (const doc of expiring) {
+      const daysLeft = Math.ceil(((doc.expiresAt ?? 0) - Date.now()) / 86_400_000);
+      const title = `Document expiring: ${doc.fileName}`;
+      const body = `"${doc.type}" expires in ${daysLeft} day${daysLeft === 1 ? "" : "s"} (${new Date(doc.expiresAt!).toLocaleDateString()}).`;
+
+      // Dedup: check if there's already an unread notification for this doc
+      const existing = await ctx.db
+        .query("notifications")
+        .withIndex("by_org_user", (q) => q.eq("orgId", s.orgId).eq("userId", s.userId))
+        .take(50);
+
+      const alreadyNotified = existing.some(
+        (n) => n.type === "document" && n.body?.includes(doc.fileName) && !n.readAt,
+      );
+
+      if (!alreadyNotified) {
+        await ctx.db.insert("notifications", {
+          orgId: s.orgId as never,
+          userId: s.userId as never,
+          title,
+          body,
+          type: "document",
+        });
+        created++;
+      }
+    }
+
+    return { created, checked: expiring.length };
+  },
+});
+
 export const checklist = query({
   args: { loadId: v.id("loads") },
   handler: async (ctx, args) => {

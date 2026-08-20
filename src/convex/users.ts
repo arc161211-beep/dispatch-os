@@ -46,7 +46,11 @@ export const provision = mutation({
     const user = await ctx.db.get(userId);
     if (!user) throw new ConvexError("User record not found.");
 
-    if (user.orgId) return { status: "ready" as const };
+    if (user.orgId) {
+      // Stamp last login time for admin visibility.
+      await ctx.db.patch(userId, { lastLoginAt: Date.now() });
+      return { status: "ready" as const };
+    }
 
     const email = user.email?.toLowerCase().trim();
 
@@ -72,6 +76,7 @@ export const provision = mutation({
           carrierId: pending.carrierId as Id<"carriers"> | undefined,
           driverId: pending.driverId as Id<"drivers"> | undefined,
           accountStatus: "active",
+          lastLoginAt: Date.now(),
         });
         await audit(ctx, null, {
           orgId,
@@ -117,6 +122,7 @@ export const provision = mutation({
       role: "admin",
       name: user.name ?? orgName,
       accountStatus: "active",
+      lastLoginAt: Date.now(),
     });
 
     await audit(ctx, null, {

@@ -560,6 +560,23 @@ export const assignResources = mutation({
     }
     await ctx.db.patch(args.id, { ...patch, ...changed } as never);
     await audit(ctx, s, { action: "load.resources.assigned", entity: "load", entityId: args.id, metadata: { ...patch } });
+
+    // Notify the driver when they are assigned to a load.
+    if (args.driverId) {
+      const driver = await ctx.db.get(args.driverId);
+      const load = await ctx.db.get(args.id);
+      if (driver && load) {
+        await ctx.db.insert("notifications", {
+          orgId: s.orgId as never,
+          userId: s.userId as never,
+          title: `Load assigned to ${driver.name}`,
+          body: `${(load as any).loadNumber}: ${(load as any).origin ?? "?"} → ${(load as any).destination ?? "?"}`,
+          link: `/loads/${args.id}`,
+          type: "load",
+        });
+      }
+    }
+
     return { ok: true };
   },
 });
