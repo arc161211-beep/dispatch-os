@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useAction, useQuery } from "convex/react";
+import { motion } from "framer-motion";
 import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
 import { useTimezone, useCanWrite } from "@/hooks/use-app";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PageHeader, StatCard, SectionCard, StatusBadge, Money, LoadingState } from "@/components/app/shared";
-import { fmtDateTime, fmtDate, fmtRelative, tzDayStart } from "@/lib/dates";
+import { KpiCard, AiInsightCard, StatusBadge, EmptyState, PageHeader } from "@/components/app/Premium";
+import { TruckHero } from "@/components/brand/TruckHero";
+import { fmtDateTime, fmtDate, fmtRelative } from "@/lib/dates";
 import { statusClass } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { TruckMap } from "@/components/app/TruckMap";
@@ -23,7 +25,16 @@ import {
   Sparkles,
   Truck,
   Wallet,
+  CalendarClock,
+  FileWarning,
+  CircleAlert,
 } from "lucide-react";
+
+const fadeUp = {
+  initial: { opacity: 0, y: 12 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.35, ease: "easeOut" as const },
+};
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -50,7 +61,18 @@ export default function Dashboard() {
     }
   }, [aiConfig, aiState, generateSummary]);
 
-  if (!summary) return <LoadingState label="Loading your operations…" />;
+  if (!summary) {
+    return (
+      <div className="space-y-6">
+        <div className="h-48 rounded-2xl bg-muted/30 animate-pulse" />
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-28 rounded-xl bg-muted/20 animate-pulse" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   const greeting = (() => {
     const h = new Date().getHours();
@@ -59,279 +81,296 @@ export default function Dashboard() {
     return "Good evening";
   })();
 
-  const quickActions = canWrite
-    ? [
-        { label: "New Load", to: "/loads?new=1" },
-        { label: "New Carrier", to: "/carriers?new=1" },
-        { label: "New Lead", to: "/leads?new=1" },
-        { label: "Ask AI", to: "/assistant" },
-      ]
-    : [{ label: "Ask AI", to: "/assistant" }];
-
   const trucksNeedingLoads = summary.trucksNeedingLoads ?? [];
 
   return (
-    <div className="space-y-8">
-      <PageHeader
-        title={`${greeting}${user?.name ? `, ${user.name.split(" ")[0]}` : ""}`}
-        description={fmtDate(Date.now(), tz)}
-        actions={
-          <>
+    <div className="space-y-6">
+      {/* ═══════════════ HERO ═══════════════ */}
+      <motion.div
+        {...fadeUp}
+        className="relative overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-br from-card via-card to-card/80"
+      >
+        <div className="relative z-10 flex flex-col lg:flex-row">
+          <div className="flex-1 p-6 lg:p-8">
+            <p className="text-xs font-semibold uppercase tracking-[0.15em] text-primary">
+              Operations Command Center
+            </p>
+            <h1 className="mt-2 text-2xl font-bold tracking-tight lg:text-3xl">
+              {greeting}{user?.name ? `, ${user.name.split(" ")[0]}` : ""}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">{fmtDate(Date.now(), tz)}</p>
+
+            {/* Operational summary */}
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+              {summary.ops.availableTrucks > 0 && (
+                <span className="flex items-center gap-1.5 rounded-full bg-[#22C55E]/10 px-2.5 py-1 font-medium text-[#22C55E]">
+                  <Truck className="size-3" /> {summary.ops.availableTrucks} truck{summary.ops.availableTrucks !== 1 ? "s" : ""} available
+                </span>
+              )}
+              {summary.ops.activeLoads > 0 && (
+                <span className="flex items-center gap-1.5 rounded-full bg-electric/10 px-2.5 py-1 font-medium text-electric">
+                  <Package className="size-3" /> {summary.ops.activeLoads} active load{summary.ops.activeLoads !== 1 ? "s" : ""}
+                </span>
+              )}
+              {summary.ops.pickupsToday > 0 && (
+                <span className="flex items-center gap-1.5 rounded-full bg-[#F5A623]/10 px-2.5 py-1 font-medium text-[#F5A623]">
+                  <CalendarClock className="size-3" /> {summary.ops.pickupsToday} pickup{summary.ops.pickupsToday !== 1 ? "s" : ""} today
+                </span>
+              )}
+              {summary.ops.urgentIssues === 0 && summary.ops.activeLoads === 0 && summary.ops.availableTrucks === 0 && (
+                <span className="flex items-center gap-1.5 text-muted-foreground/70">
+                  <CheckCircle2 className="size-3 text-[#22C55E]" /> Your operation is under control.
+                </span>
+              )}
+            </div>
+
+            {/* Quick actions */}
             {canWrite && (
-              <Link to="/loads?new=1">
-                <Button size="sm" className="gap-1.5">
+              <div className="mt-5 flex flex-wrap gap-2">
+                <Button size="sm" className="gap-1.5 bg-primary hover:bg-primary/90 shadow-sm shadow-primary/20" onClick={() => navigate("/loads?new=1")}>
                   <Package className="size-3.5" /> New Load
                 </Button>
-              </Link>
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => navigate("/carriers?new=1")}>
+                  <Building2 className="size-3.5" /> New Carrier
+                </Button>
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => navigate("/leads?new=1")}>
+                  New Lead
+                </Button>
+                <Button size="sm" variant="ghost" className="gap-1.5 text-muted-foreground" onClick={() => navigate("/assistant")}>
+                  <Sparkles className="size-3.5" /> AI
+                </Button>
+              </div>
             )}
-          </>
-        }
-      />
-
-      {/* Onboarding checklist */}
-      {summary.empty && (
-        <SectionCard title="Get DispatchOS ready in minutes" description="Set up your workspace with real records — no demo data required.">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {[
-              { label: "Add your first carrier", to: "/carriers?new=1" },
-              { label: "Add a truck to the carrier", to: "/trucks?new=1" },
-              { label: "Add a driver", to: "/drivers?new=1" },
-              { label: "Create your first load", to: "/loads?new=1" },
-            ].map((s, i) => (
-              <button
-                key={s.label}
-                type="button"
-                onClick={() => navigate(s.to)}
-                className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3 text-left transition-colors hover:bg-muted/60"
-              >
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">{i + 1}</span>
-                <span className="text-sm font-medium">{s.label}</span>
-                <ArrowRight className="ml-auto size-4 text-muted-foreground" />
-              </button>
-            ))}
           </div>
-        </SectionCard>
+
+          {/* Truck animation */}
+          <div className="hidden w-[360px] shrink-0 items-center justify-center lg:flex">
+            <TruckHero width={340} height={180} status={summary.ops.activeLoads > 0 ? "moving" : "idle"} />
+          </div>
+        </div>
+      </motion.div>
+
+      {/* ═══════════════ KPI CARDS ═══════════════ */}
+      <motion.div {...fadeUp} transition={{ delay: 0.08 }} className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        <KpiCard icon={<Truck className="size-4" />} label="Active Trucks" value={summary.ops.trucks} accent="blue" />
+        <KpiCard icon={<MapPin className="size-4" />} label="Available" value={summary.ops.availableTrucks} accent="green" />
+        <KpiCard icon={<Package className="size-4" />} label="Active Loads" value={summary.ops.activeLoads} accent="blue" />
+        <KpiCard icon={<Route className="size-4" />} label="In Transit" value={summary.ops.inTransit} accent="gold" />
+        <KpiCard icon={<CalendarClock className="size-4" />} label="Pickups Today" value={summary.ops.pickupsToday} accent={summary.ops.pickupsToday > 0 ? "green" : "blue"} />
+        <KpiCard icon={<CheckCircle2 className="size-4" />} label="Deliveries Today" value={summary.ops.deliveriesToday} accent={summary.ops.deliveriesToday > 0 ? "green" : "blue"} />
+        <KpiCard icon={<Wallet className="size-4" />} label="Gross Booked" value={`$${(summary.finance.grossBookedCents / 100).toLocaleString()}`} accent="gold" />
+        <KpiCard
+          icon={<FileWarning className="size-4" />}
+          label="Overdue"
+          value={summary.finance.overdueInvoices}
+          accent={summary.finance.overdueInvoices > 0 ? "red" : "green"}
+        />
+      </motion.div>
+
+      {/* ═══════════════ EMPTY STATE ═══════════════ */}
+      {summary.empty && (
+        <motion.div {...fadeUp} transition={{ delay: 0.12 }}>
+          <EmptyState
+            icon={<Package className="size-6" />}
+            title="Welcome to DispatchOS"
+            description="Set up your workspace with real records — no demo data required."
+            action={
+              <div className="flex flex-wrap justify-center gap-2">
+                {canWrite && (
+                  <>
+                    <Button size="sm" onClick={() => navigate("/carriers?new=1")}><Building2 className="mr-1.5 size-3.5" /> Add First Carrier</Button>
+                    <Button size="sm" variant="outline" onClick={() => navigate("/trucks?new=1")}><Truck className="mr-1.5 size-3.5" /> Add a Truck</Button>
+                    <Button size="sm" variant="outline" onClick={() => navigate("/drivers?new=1")}><Route className="mr-1.5 size-3.5" /> Add a Driver</Button>
+                    <Button size="sm" variant="outline" onClick={() => navigate("/loads?new=1")}><Package className="mr-1.5 size-3.5" /> Create Load</Button>
+                  </>
+                )}
+              </div>
+            }
+          />
+        </motion.div>
       )}
 
-      {/* Operations */}
-      <div>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Operations</h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          <StatCard label="Active carriers" value={summary.ops.activeCarriers} sub={`${summary.ops.totalCarriers} total`} icon={<Building2 className="size-4" />} />
-          <StatCard label="Available trucks" value={summary.ops.availableTrucks} sub={`${summary.ops.trucks} total`} icon={<Truck className="size-4" />} />
-          <StatCard label="Active loads" value={summary.ops.activeLoads} icon={<Package className="size-4" />} />
-          <StatCard label="In transit" value={summary.ops.inTransit} icon={<Route className="size-4" />} />
-          <StatCard label="Pickups today" value={summary.ops.pickupsToday} tone={summary.ops.pickupsToday > 0 ? "good" : "default"} />
-          <StatCard label="Deliveries today" value={summary.ops.deliveriesToday} tone={summary.ops.deliveriesToday > 0 ? "good" : "default"} />
-          <StatCard label="Delayed loads" value={summary.ops.delayedLoads} tone={summary.ops.delayedLoads > 0 ? "bad" : "default"} />
-          <StatCard label="Urgent issues" value={summary.ops.urgentIssues} tone={summary.ops.urgentIssues > 0 ? "bad" : "good"} />
+      {/* ═══════════════ MAP + NEEDING LOADS ═══════════════ */}
+      <motion.div {...fadeUp} transition={{ delay: 0.16 }} className="grid gap-5 lg:grid-cols-5">
+        <div className="lg:col-span-3">
+          <div className="rounded-xl border border-border/60 bg-card p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Fleet Map</h3>
+                {truckLocations && truckLocations.length > 0 && (
+                  <p className="mt-0.5 text-[11px] text-muted-foreground/70">{truckLocations.length} truck{truckLocations.length !== 1 ? "s" : ""} with GPS</p>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="size-1.5 rounded-full bg-[#22C55E] animate-pulse" />
+                <span className="text-[10px] text-muted-foreground/60">Live</span>
+              </div>
+            </div>
+            <TruckMap
+              trucks={(truckLocations ?? []).map((t: any) => ({
+                truckId: t.truckId,
+                unitNumber: t.unitNumber,
+                type: t.type,
+                driverName: t.driverName,
+                availability: t.availability,
+                lat: t.lat,
+                lon: t.lon,
+                location: t.location,
+                at: t.at,
+              }))}
+            />
+          </div>
         </div>
-      </div>
 
-      {/* Finance */}
-      <div>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Finance</h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          <StatCard label="Gross booked" value={<Money cents={summary.finance.grossBookedCents} />} icon={<Wallet className="size-4" />} />
-          <StatCard label="Dispatcher revenue" value={<Money cents={summary.finance.dispatcherRevenueCents} />} tone="accent" />
-          <StatCard label="Outstanding fees" value={<Money cents={summary.finance.outstandingFeesCents} />} tone={summary.finance.outstandingFeesCents > 0 ? "warn" : "good"} />
-          <StatCard label="Paid fees" value={<Money cents={summary.finance.paidFeesCents} />} tone="good" />
-          <StatCard label="Overdue invoices" value={summary.finance.overdueInvoices} tone={summary.finance.overdueInvoices > 0 ? "bad" : "default"} />
+        <div className="lg:col-span-2">
+          <div className="rounded-xl border border-border/60 bg-card p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Trucks Needing Loads</h3>
+              {canWrite && (
+                <Link to="/loads?new=1" className="text-[11px] font-medium text-primary hover:underline">Create load</Link>
+              )}
+            </div>
+            {trucksNeedingLoads.length === 0 ? (
+              <div className="flex items-center gap-2 py-6 text-xs text-muted-foreground">
+                <CheckCircle2 className="size-3.5 text-[#22C55E]" /> All trucks assigned or unavailable.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {trucksNeedingLoads.slice(0, 8).map((t: any) => (
+                  <Link
+                    key={t._id}
+                    to={`/trucks/${t._id}`}
+                    className="flex items-center justify-between rounded-lg border border-border/40 bg-background/50 px-3 py-2 transition-colors hover:bg-muted/50"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold">{t.unitNumber} {t.type ? <span className="font-normal text-muted-foreground">({t.type})</span> : ""}</p>
+                      <p className="text-[11px] text-muted-foreground">{t.currentLocation ?? "No location"}</p>
+                    </div>
+                    <StatusBadge status="Available" />
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      </motion.div>
 
-      {/* Map + Trucks needing loads */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <SectionCard
-          title="Truck Locations"
-          description={truckLocations && truckLocations.length > 0 ? `${truckLocations.length} truck${truckLocations.length !== 1 ? "s" : ""} with GPS` : undefined}
-        >
-          <TruckMap
-            trucks={(truckLocations ?? []).map((t: any) => ({
-              truckId: t.truckId,
-              unitNumber: t.unitNumber,
-              type: t.type,
-              driverName: t.driverName,
-              availability: t.availability,
-              lat: t.lat,
-              lon: t.lon,
-              location: t.location,
-              at: t.at,
-            }))}
-          />
-        </SectionCard>
-
-        <SectionCard
-          title="Trucks Needing Loads"
-          description={`${trucksNeedingLoads.length} available truck${trucksNeedingLoads.length !== 1 ? "s" : ""} without assignment`}
-          actions={canWrite ? (
-            <Link to="/loads?new=1" className="text-xs font-medium text-primary hover:underline">Create load</Link>
-          ) : undefined}
-        >
-          {trucksNeedingLoads.length === 0 ? (
-            <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
-              <CheckCircle2 className="size-4 text-emerald-500" /> All trucks are assigned or unavailable.
+      {/* ═══════════════ ATTENTION CENTER ═══════════════ */}
+      {(summary.attention.urgentMessages.length > 0 ||
+        summary.attention.missingPod.length > 0 ||
+        summary.attention.overdueTasks.length > 0 ||
+        summary.attention.overdueInvoices.length > 0) && (
+        <motion.div {...fadeUp} transition={{ delay: 0.2 }}>
+          <div className="rounded-xl border border-border/60 bg-card p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <div className="flex size-5 items-center justify-center rounded bg-[#F5A623]/10">
+                <AlertTriangle className="size-3 text-[#F5A623]" />
+              </div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Needs Your Attention</h3>
             </div>
-          ) : (
-            <div className="divide-y">
-              {trucksNeedingLoads.slice(0, 6).map((t: any) => (
-                <div key={t._id} className="flex items-center justify-between py-2.5">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">{t.unitNumber} {t.type ? `(${t.type})` : ""}</p>
-                    <p className="text-xs text-muted-foreground">{t.currentLocation ?? "No location"}</p>
-                  </div>
-                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-transparent text-[10px]">
-                    Needs load
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          )}
-        </SectionCard>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Attention */}
-        <SectionCard
-          title="Needs attention"
-          description="Real items from your records"
-          className="lg:col-span-2"
-          actions={
-            <Link to="/tasks" className="text-xs font-medium text-primary hover:underline">All tasks</Link>
-          }
-        >
-          {summary.ops.urgentIssues === 0 ? (
-            <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
-              <CheckCircle2 className="size-4 text-emerald-500" /> Nothing urgent right now.
-            </div>
-          ) : (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {summary.attention.urgentMessages.length > 0 && (
-                <AttentionGroup title="Urgent messages" count={summary.attention.urgentMessages.length}>
+                <AttentionGroup title="Urgent Messages" count={summary.attention.urgentMessages.length}>
                   {summary.attention.urgentMessages.map((m) => (
-                    <AttentionRow key={m._id} to="/messages" title={m.body.slice(0, 90)} sub={`${m.priority} · ${m.status}`} badge="urgent" />
+                    <AttentionRow key={m._id} to="/messages" title={m.body.slice(0, 100)} sub={`${m.priority} · ${m.status}`} urgent />
                   ))}
                 </AttentionGroup>
               )}
               {summary.attention.missingPod.length > 0 && (
                 <AttentionGroup title="Missing POD" count={summary.attention.missingPod.length}>
                   {summary.attention.missingPod.map((l) => (
-                    <AttentionRow key={l._id} to={`/loads/${l._id}`} title={`${l.loadNumber} — ${l.origin ?? "?"} → ${l.destination ?? "?"}`} sub={l.status} badge="POD" />
+                    <AttentionRow key={l._id} to={`/loads/${l._id}`} title={`${l.loadNumber} — ${l.origin ?? "?"} → ${l.destination ?? "?"}`} sub={l.status} />
                   ))}
                 </AttentionGroup>
               )}
               {summary.attention.overdueTasks.length > 0 && (
-                <AttentionGroup title="Overdue tasks" count={summary.attention.overdueTasks.length}>
+                <AttentionGroup title="Overdue Tasks" count={summary.attention.overdueTasks.length}>
                   {summary.attention.overdueTasks.map((t) => (
-                    <AttentionRow key={t._id} to="/tasks" title={t.title} sub={`Due ${fmtRelative(t.dueAt)}`} badge={t.priority} />
+                    <AttentionRow key={t._id} to="/tasks" title={t.title} sub={`Due ${fmtRelative(t.dueAt)}`} />
                   ))}
                 </AttentionGroup>
               )}
               {summary.attention.overdueInvoices.length > 0 && (
-                <AttentionGroup title="Overdue invoices" count={summary.attention.overdueInvoices.length}>
+                <AttentionGroup title="Overdue Invoices" count={summary.attention.overdueInvoices.length}>
                   {summary.attention.overdueInvoices.map((i) => (
-                    <AttentionRow key={i._id} to="/finance" title={i.invoiceNumber} sub={<Money cents={i.amountCents - i.paidCents} />} badge="overdue" />
-                  ))}
-                </AttentionGroup>
-              )}
-              {summary.attention.expiringCarriers.length > 0 && (
-                <AttentionGroup title="Insurance expiring within 30 days" count={summary.attention.expiringCarriers.length}>
-                  {summary.attention.expiringCarriers.map((c) => (
-                    <AttentionRow key={c._id} to={`/carriers/${c._id}`} title={c.companyName} sub={`Expires ${fmtDate(c.insuranceExpiry)}`} badge="expiring" />
-                  ))}
-                </AttentionGroup>
-              )}
-              {summary.attention.expiringDrivers.length > 0 && (
-                <AttentionGroup title="Driver credentials expiring" count={summary.attention.expiringDrivers.length}>
-                  {summary.attention.expiringDrivers.map((d) => (
-                    <AttentionRow key={d._id} to="/drivers" title={d.name} sub={fmtDate(d.licenseExpiry ?? d.medicalCardExpiry)} badge="expiring" />
+                    <AttentionRow key={i._id} to="/finance" title={i.invoiceNumber} sub={`$${((i.amountCents - i.paidCents) / 100).toLocaleString()}`} />
                   ))}
                 </AttentionGroup>
               )}
             </div>
-          )}
-        </SectionCard>
+          </div>
+        </motion.div>
+      )}
 
-        {/* AI summary */}
-        <SectionCard
-          title="Daily summary"
-          description={aiConfig?.configured ? `AI · ${aiConfig.model}` : "Computed from your records"}
-          actions={<Sparkles className="size-4 text-primary" />}
-        >
-          {aiState === "loading" && (
-            <div className="space-y-2 py-2">
-              <Skeleton className="h-3 w-full" />
-              <Skeleton className="h-3 w-5/6" />
-              <Skeleton className="h-3 w-4/6" />
+      {/* ═══════════════ UPCOMING ═══════════════ */}
+      <motion.div {...fadeUp} transition={{ delay: 0.24 }} className="grid gap-5 lg:grid-cols-2">
+        <div className="rounded-xl border border-border/60 bg-card p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Upcoming Pickups</h3>
+              <p className="mt-0.5 text-[11px] text-muted-foreground/70">Next 7 days</p>
             </div>
-          )}
-          {aiState === "done" && aiText && <p className="text-sm leading-6 text-muted-foreground">{aiText}</p>}
-          {aiState === "error" && <p className="text-sm leading-6 text-muted-foreground">{summary.dailySummaryText}</p>}
-          {aiState === "idle" && !aiConfig?.configured && <p className="text-sm leading-6 text-muted-foreground">{summary.dailySummaryText}</p>}
-          {aiState === "idle" && aiConfig?.configured && <p className="text-xs text-muted-foreground">Generating…</p>}
-          {!aiConfig?.configured && (
-            <p className="mt-3 rounded-lg border border-dashed bg-muted/40 p-2.5 text-xs text-muted-foreground">
-              AI Not Configured — the summary above is generated from real database records. Add NVIDIA_API_KEY,
-              NVIDIA_BASE_URL and NVIDIA_MODEL to enable the AI assistant.
-            </p>
-          )}
-          <Link to="/assistant">
-            <Button variant="outline" size="sm" className="mt-4 w-full gap-1.5">
-              <Sparkles className="size-3.5" /> Open AI assistant
-            </Button>
-          </Link>
-        </SectionCard>
-      </div>
-
-      {/* Upcoming */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <SectionCard title="Upcoming pickups" description="Next 7 days" actions={quickActions.length > 0 ? <QuickActions actions={quickActions} navigate={navigate} /> : undefined}>
+          </div>
           {summary.upcoming.pickups.length === 0 ? (
-            <p className="py-3 text-sm text-muted-foreground">No upcoming pickups scheduled.</p>
+            <p className="py-4 text-center text-xs text-muted-foreground">No upcoming pickups</p>
           ) : (
-            <div className="divide-y">
+            <div className="space-y-1.5">
               {summary.upcoming.pickups.map((l) => (
-                <Link key={l._id} to={`/loads/${l._id}`} className="flex items-center justify-between gap-3 py-2.5 hover:bg-muted/30">
+                <Link key={l._id} to={`/loads/${l._id}`} className="flex items-center justify-between gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted/40">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{l.loadNumber} · {l.origin ?? "?"}</p>
-                    <p className="truncate text-xs text-muted-foreground">{fmtDateTime(l.pickupDate, tz)}</p>
+                    <p className="truncate text-[11px] text-muted-foreground">{fmtDateTime(l.pickupDate, tz)}</p>
                   </div>
                   <StatusBadge status={l.status} />
                 </Link>
               ))}
             </div>
           )}
-        </SectionCard>
-        <SectionCard title="Upcoming deliveries" description="Next 7 days">
+        </div>
+
+        <div className="rounded-xl border border-border/60 bg-card p-4">
+          <div className="mb-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Upcoming Deliveries</h3>
+            <p className="mt-0.5 text-[11px] text-muted-foreground/70">Next 7 days</p>
+          </div>
           {summary.upcoming.deliveries.length === 0 ? (
-            <p className="py-3 text-sm text-muted-foreground">No upcoming deliveries scheduled.</p>
+            <p className="py-4 text-center text-xs text-muted-foreground">No upcoming deliveries</p>
           ) : (
-            <div className="divide-y">
+            <div className="space-y-1.5">
               {summary.upcoming.deliveries.map((l) => (
-                <Link key={l._id} to={`/loads/${l._id}`} className="flex items-center justify-between gap-3 py-2.5 hover:bg-muted/30">
+                <Link key={l._id} to={`/loads/${l._id}`} className="flex items-center justify-between gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted/40">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{l.loadNumber} · {l.destination ?? "?"}</p>
-                    <p className="truncate text-xs text-muted-foreground">{fmtDateTime(l.deliveryDate, tz)}</p>
+                    <p className="truncate text-[11px] text-muted-foreground">{fmtDateTime(l.deliveryDate, tz)}</p>
                   </div>
                   <StatusBadge status={l.status} />
                 </Link>
               ))}
             </div>
           )}
-        </SectionCard>
-      </div>
-    </div>
-  );
-}
+        </div>
+      </motion.div>
 
-function QuickActions({ actions, navigate }: { actions: { label: string; to: string }[]; navigate: (to: string) => void }) {
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {actions.slice(0, 2).map((a) => (
-        <Button key={a.label} variant="outline" size="sm" onClick={() => navigate(a.to)}>
-          {a.label}
-        </Button>
-      ))}
+      {/* ═══════════════ AI + FINANCE ═══════════════ */}
+      <motion.div {...fadeUp} transition={{ delay: 0.28 }} className="grid gap-5 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <div className="rounded-xl border border-border/60 bg-card p-4">
+            <div className="mb-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Finance Overview</h3>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <KpiCard icon={<Wallet className="size-4" />} label="Dispatcher Revenue" value={`$${(summary.finance.dispatcherRevenueCents / 100).toLocaleString()}`} accent="gold" />
+              <KpiCard icon={<Wallet className="size-4" />} label="Paid" value={`$${(summary.finance.paidFeesCents / 100).toLocaleString()}`} accent="green" />
+              <KpiCard icon={<CircleAlert className="size-4" />} label="Outstanding" value={`$${(summary.finance.outstandingFeesCents / 100).toLocaleString()}`} accent={summary.finance.outstandingFeesCents > 0 ? "red" : "green"} />
+            </div>
+          </div>
+        </div>
+        <AiInsightCard
+          configured={!!aiConfig?.configured}
+          text={aiText ?? summary.dailySummaryText}
+          loading={aiState === "loading"}
+        />
+      </motion.div>
     </div>
   );
 }
@@ -339,29 +378,26 @@ function QuickActions({ actions, navigate }: { actions: { label: string; to: str
 function AttentionGroup({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
-        <Badge variant="outline" className={cn("border-transparent", count > 0 ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" : "")}>
-          {count}
-        </Badge>
+      <div className="flex items-center justify-between mb-1.5">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{title}</p>
+        <Badge variant="outline" className="border-[#F5A623]/20 bg-[#F5A623]/10 text-[10px] font-bold text-[#F5A623]">{count}</Badge>
       </div>
-      <div className="mt-1 divide-y">{children}</div>
+      <div className="space-y-1">{children}</div>
     </div>
   );
 }
 
-function AttentionRow({ to, title, sub, badge }: { to: string; title: React.ReactNode; sub: React.ReactNode; badge?: string }) {
+function AttentionRow({ to, title, sub, urgent }: { to: string; title: React.ReactNode; sub: React.ReactNode; urgent?: boolean }) {
   return (
-    <Link to={to} className="flex items-center justify-between gap-3 py-2 hover:bg-muted/30">
+    <Link to={to} className={cn(
+      "flex items-center justify-between gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-muted/40",
+      urgent && "border border-destructive/20 bg-destructive/5",
+    )}>
       <div className="min-w-0">
         <p className="truncate text-sm font-medium">{title}</p>
-        <p className="truncate text-xs text-muted-foreground">{sub}</p>
+        <p className="truncate text-[11px] text-muted-foreground">{sub}</p>
       </div>
-      {badge && (
-        <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide", statusClass(badge))}>
-          {badge}
-        </span>
-      )}
+      <ArrowRight className="size-3.5 shrink-0 text-muted-foreground/40" />
     </Link>
   );
 }

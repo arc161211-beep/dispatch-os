@@ -1,12 +1,12 @@
-/* DO NOT CHANGE */
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600;700&display=swap");
+/* DispatchOS — Premium Logistics Theme */
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 @custom-variant dark (&:is(.dark *));
 
-/* DO NOT CHANGE */
+/* DispatchOS Brand — Tailwind integration */
 @theme inline {
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-sans: "Manrope", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -42,77 +42,84 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-gold: #F5A623;
+  --color-electric: #4F8CFF;
+  --color-surface-dark: #11161F;
 }
 
-/* CHANGE VALUES FOR THEME — DispatchOS "Modern" palette: quiet cool neutrals
-   with a refined deep-blue accent. */
+/* ============================================================
+   DISPATCHOS LIGHT THEME
+   ============================================================ */
 :root {
   --radius: 0.75rem;
-  --background: oklch(0.985 0.002 250);
-  --foreground: oklch(0.21 0.02 255);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.21 0.02 255);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.21 0.02 255);
-  --primary: oklch(0.45 0.12 256);
-  --primary-foreground: oklch(0.985 0.002 250);
-  --secondary: oklch(0.965 0.004 255);
-  --secondary-foreground: oklch(0.3 0.02 255);
-  --muted: oklch(0.965 0.004 255);
-  --muted-foreground: oklch(0.52 0.02 255);
-  --accent: oklch(0.955 0.008 255);
-  --accent-foreground: oklch(0.3 0.02 255);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.92 0.006 255);
-  --input: oklch(0.92 0.006 255);
-  --ring: oklch(0.45 0.12 256);
-  --chart-1: oklch(0.55 0.14 256);
-  --chart-2: oklch(0.65 0.15 170);
-  --chart-3: oklch(0.7 0.12 80);
-  --chart-4: oklch(0.62 0.17 300);
-  --chart-5: oklch(0.65 0.18 20);
-  --sidebar: oklch(0.99 0.002 250);
-  --sidebar-foreground: oklch(0.28 0.02 255);
-  --sidebar-primary: oklch(0.45 0.12 256);
-  --sidebar-primary-foreground: oklch(0.985 0.002 250);
-  --sidebar-accent: oklch(0.955 0.008 255);
-  --sidebar-accent-foreground: oklch(0.3 0.02 255);
-  --sidebar-border: oklch(0.92 0.006 255);
-  --sidebar-ring: oklch(0.45 0.12 256);
+  --background: #F5F7FA;
+  --foreground: #0B0D0F;
+  --card: #FFFFFF;
+  --card-foreground: #0B0D0F;
+  --popover: #FFFFFF;
+  --popover-foreground: #0B0D0F;
+  --primary: #4F8CFF;
+  --primary-foreground: #FFFFFF;
+  --secondary: #EDF0F4;
+  --secondary-foreground: #2A3142;
+  --muted: #EDF0F4;
+  --muted-foreground: #6B7A90;
+  --accent: #F0F4FA;
+  --accent-foreground: #2A3142;
+  --destructive: #EF4444;
+  --border: #D8DEE8;
+  --input: #D8DEE8;
+  --ring: #4F8CFF;
+  --chart-1: #4F8CFF;
+  --chart-2: #22C55E;
+  --chart-3: #F5A623;
+  --chart-4: #EF4444;
+  --chart-5: #8B5CF6;
+  --sidebar: #0F1318;
+  --sidebar-foreground: #C8D0E0;
+  --sidebar-primary: #4F8CFF;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: rgba(79, 140, 255, 0.08);
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-ring: #4F8CFF;
 }
 
+/* ============================================================
+   DISPATCHOS DARK THEME — Premium Cinematic
+   ============================================================ */
 .dark {
-  --background: oklch(0.155 0.014 255);
-  --foreground: oklch(0.955 0.004 255);
-  --card: oklch(0.2 0.016 255);
-  --card-foreground: oklch(0.955 0.004 255);
-  --popover: oklch(0.2 0.016 255);
-  --popover-foreground: oklch(0.955 0.004 255);
-  --primary: oklch(0.68 0.11 256);
-  --primary-foreground: oklch(0.16 0.014 255);
-  --secondary: oklch(0.27 0.018 255);
-  --secondary-foreground: oklch(0.955 0.004 255);
-  --muted: oklch(0.27 0.018 255);
-  --muted-foreground: oklch(0.72 0.01 255);
-  --accent: oklch(0.27 0.018 255);
-  --accent-foreground: oklch(0.955 0.004 255);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.68 0.11 256);
-  --chart-1: oklch(0.68 0.11 256);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.185 0.015 255);
-  --sidebar-foreground: oklch(0.955 0.004 255);
-  --sidebar-primary: oklch(0.68 0.11 256);
-  --sidebar-primary-foreground: oklch(0.16 0.014 255);
-  --sidebar-accent: oklch(0.27 0.018 255);
-  --sidebar-accent-foreground: oklch(0.955 0.004 255);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.68 0.11 256);
+  --background: #0B0D0F;
+  --foreground: #F0F2F5;
+  --card: #11161F;
+  --card-foreground: #F0F2F5;
+  --popover: #151B26;
+  --popover-foreground: #F0F2F5;
+  --primary: #4F8CFF;
+  --primary-foreground: #FFFFFF;
+  --secondary: #1A2030;
+  --secondary-foreground: #C8D0E0;
+  --muted: #1A2030;
+  --muted-foreground: #6B7A90;
+  --accent: #1A2030;
+  --accent-foreground: #F0F2F5;
+  --destructive: #DC2626;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.10);
+  --ring: #4F8CFF;
+  --chart-1: #4F8CFF;
+  --chart-2: #22C55E;
+  --chart-3: #F5A623;
+  --chart-4: #EF4444;
+  --chart-5: #8B5CF6;
+  --sidebar: #0B0D0F;
+  --sidebar-foreground: #C8D0E0;
+  --sidebar-primary: #4F8CFF;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: rgba(79, 140, 255, 0.06);
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-ring: #4F8CFF;
 }
 
 @layer base {
@@ -121,6 +128,7 @@
   }
   html {
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
   }
   body {
@@ -132,8 +140,81 @@
   }
 }
 
-/* Quiet scrollbars */
+/* ============================================================
+   DISPATCHOS PREMIUM COMPONENTS
+   ============================================================ */
+
+/* Scrollbar */
 * {
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in oklch, var(--border) 80%, transparent) transparent;
+  scrollbar-color: rgba(107, 122, 144, 0.2) transparent;
+}
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(107, 122, 144, 0.2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(107, 122, 144, 0.35); }
+
+/* Premium glass surfaces */
+.glass-surface {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.dark .glass-surface {
+  background: rgba(17, 22, 31, 0.7);
+}
+
+/* Premium gradient border */
+.gradient-border {
+  position: relative;
+}
+.gradient-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(79, 140, 255, 0.3), rgba(245, 166, 35, 0.1));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Brand glow */
+.brand-glow {
+  box-shadow: 0 0 60px -12px rgba(79, 140, 255, 0.15);
+}
+
+/* Subtle card hover lift */
+.card-hover {
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+.card-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+/* Premium focus ring */
+.focus-ring {
+  outline: none;
+}
+.focus-ring:focus-visible {
+  box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--primary);
+}
+
+/* Number display */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

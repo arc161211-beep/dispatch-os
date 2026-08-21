@@ -1,6 +1,8 @@
 import { motion } from "framer-motion";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
+import { Logo, LogoIcon } from "@/components/brand/Logo";
+import { TruckHero } from "@/components/brand/TruckHero";
 import {
   ArrowRight,
   BarChart3,
@@ -24,7 +26,7 @@ import {
 const fadeUp = {
   initial: { opacity: 0, y: 16 },
   whileInView: { opacity: 1, y: 0 },
-  viewport: { once: true, margin: "-80px" },
+  viewport: { once: true, margin: "-80px" } as const,
   transition: { duration: 0.5, ease: "easeOut" as const },
 };
 
@@ -52,25 +54,22 @@ const workflow = [
 
 export default function Landing() {
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {/* Nav */}
-      <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <div className="flex items-center gap-2.5">
-            <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">D</div>
-            <span className="text-lg font-semibold tracking-tight">DispatchOS</span>
-          </div>
-          <nav className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">
-            <a href="#features" className="transition-colors hover:text-foreground">Features</a>
-            <a href="#workflow" className="transition-colors hover:text-foreground">Workflow</a>
-            <a href="#security" className="transition-colors hover:text-foreground">Security</a>
+    <div className="min-h-screen bg-[#0B0D0F] text-white">
+      {/* ═══════════════ NAV ═══════════════ */}
+      <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-[#0B0D0F]/80 backdrop-blur-xl">
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
+          <Logo size="sm" variant="full" className="[&_span]:!text-white [&_span]:font-bold" />
+          <nav className="hidden items-center gap-6 text-sm text-white/40 md:flex">
+            <a href="#features" className="transition-colors hover:text-white/70">Features</a>
+            <a href="#workflow" className="transition-colors hover:text-white/70">Workflow</a>
+            <a href="#security" className="transition-colors hover:text-white/70">Security</a>
           </nav>
           <div className="flex items-center gap-2">
             <Link to="/auth">
-              <Button variant="ghost" size="sm">Sign in</Button>
+              <Button variant="ghost" size="sm" className="text-white/60 hover:text-white hover:bg-white/[0.06]">Sign in</Button>
             </Link>
             <Link to="/auth?returnTo=%2Fdashboard">
-              <Button size="sm" className="gap-1.5">
+              <Button size="sm" className="gap-1.5 bg-electric hover:bg-electric/90 text-white shadow-lg shadow-electric/20">
                 Launch app <ArrowRight className="size-3.5" />
               </Button>
             </Link>
@@ -78,64 +77,77 @@ export default function Landing() {
         </div>
       </header>
 
-      {/* Hero */}
+      {/* ═══════════════ HERO ═══════════════ */}
       <section className="relative overflow-hidden">
-        <div
-          className="pointer-events-none absolute inset-0 opacity-[0.04]"
+        {/* Background grid */}
+        <div className="pointer-events-none absolute inset-0 opacity-[0.03]"
           style={{
-            backgroundImage:
-              "linear-gradient(to right, currentColor 1px, transparent 1px), linear-gradient(to bottom, currentColor 1px, transparent 1px)",
-            backgroundSize: "56px 56px",
+            backgroundImage: "linear-gradient(to right, rgba(255,255,255,1) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,1) 1px, transparent 1px)",
+            backgroundSize: "60px 60px",
           }}
         />
-        <div className="relative mx-auto max-w-6xl px-4 pb-20 pt-16 text-center sm:px-6 sm:pt-24">
-          <motion.div {...fadeUp}>
-            <span className="inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
-              <span className="size-1.5 rounded-full bg-emerald-500" />
-              Built for solo dispatchers and small dispatch agencies
+        {/* Radial glow */}
+        <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(ellipse 60% 50% at 50% 0%, rgba(79,140,255,0.08) 0%, transparent 70%)" }} />
+
+        <div className="relative mx-auto max-w-6xl px-4 pb-16 pt-20 sm:px-6 sm:pt-28">
+          <motion.div {...fadeUp} className="text-center">
+            <span className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1 text-xs font-medium text-white/50">
+              <span className="size-1.5 rounded-full bg-[#22C55E]" />
+              Built for solo dispatchers and dispatch agencies
             </span>
           </motion.div>
+
           <motion.h1
             {...fadeUp}
-            className="mx-auto mt-6 max-w-3xl text-4xl font-semibold leading-tight tracking-tight sm:text-6xl"
+            className="mx-auto mt-7 max-w-3xl text-center text-4xl font-extrabold leading-[1.1] tracking-tight sm:text-6xl"
           >
-            Run your freight dispatch business from{" "}
-            <span className="text-primary">one command center</span>
+            Run your freight dispatch business
+            <br />
+            from <span className="text-electric">one command center</span>
           </motion.h1>
+
           <motion.p
             {...fadeUp}
-            className="mx-auto mt-5 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg"
+            className="mx-auto mt-5 max-w-2xl text-center text-base leading-7 text-white/40 sm:text-lg"
           >
             DispatchOS manages the entire operational lifecycle — carrier clients, trucks, drivers,
             brokers, loads, rates, documents, communications, invoicing, and payments — so nothing
             falls through the cracks between the load board and the bank deposit.
           </motion.p>
+
           <motion.div {...fadeUp} className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link to="/auth?returnTo=%2Fdashboard" className="w-full sm:w-auto">
-              <Button size="lg" className="w-full gap-2 sm:w-auto">
+              <Button size="lg" className="w-full gap-2 bg-electric hover:bg-electric/90 text-white shadow-lg shadow-electric/20 sm:w-auto">
                 Start dispatching <ArrowRight className="size-4" />
               </Button>
             </Link>
             <a href="#features" className="w-full sm:w-auto">
-              <Button size="lg" variant="outline" className="w-full sm:w-auto">
+              <Button size="lg" variant="outline" className="w-full border-white/[0.1] text-white/60 hover:bg-white/[0.04] hover:text-white sm:w-auto">
                 Explore features
               </Button>
             </a>
           </motion.div>
-          <motion.div {...fadeUp} className="mx-auto mt-10 flex max-w-xl flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1.5"><ShieldCheck className="size-3.5 text-emerald-500" /> Multi-tenant security</span>
-            <span className="flex items-center gap-1.5"><CheckCircle2 className="size-3.5 text-emerald-500" /> No fake data — real records</span>
-            <span className="flex items-center gap-1.5"><Sparkles className="size-3.5 text-emerald-500" /> AI assists, humans approve</span>
+
+          {/* Trust indicators */}
+          <motion.div {...fadeUp} className="mx-auto mt-10 flex max-w-lg flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-white/30">
+            <span className="flex items-center gap-1.5"><ShieldCheck className="size-3.5 text-[#22C55E]/60" /> Multi-tenant security</span>
+            <span className="flex items-center gap-1.5"><CheckCircle2 className="size-3.5 text-[#22C55E]/60" /> Real records, no fake data</span>
+            <span className="flex items-center gap-1.5"><Sparkles className="size-3.5 text-electric/60" /> AI assists, humans approve</span>
+          </motion.div>
+
+          {/* Truck hero */}
+          <motion.div {...fadeUp} className="mx-auto mt-12 max-w-2xl">
+            <TruckHero width={700} height={200} status="moving" />
           </motion.div>
         </div>
       </section>
 
-      {/* Features */}
-      <section id="features" className="border-t bg-muted/30 py-20">
+      {/* ═══════════════ FEATURES ═══════════════ */}
+      <section id="features" className="border-t border-white/[0.06] py-20">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <motion.div {...fadeUp} className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-semibold tracking-tight">Everything a dispatch operation needs</h2>
-            <p className="mt-3 text-muted-foreground">
+            <h2 className="text-3xl font-extrabold tracking-tight">Everything a dispatch operation needs</h2>
+            <p className="mt-3 text-white/40">
               Leads, carriers, trucks, drivers, brokers, loads, rates, documents, messages, tasks,
               finance, reports — connected to one database with one permission system.
             </p>
@@ -146,53 +158,52 @@ export default function Landing() {
                 key={f.title}
                 {...fadeUp}
                 transition={{ duration: 0.4, delay: (i % 3) * 0.05 }}
-                className="group rounded-xl border bg-card p-5 transition-shadow hover:shadow-md"
+                className="group rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 transition-all duration-200 hover:border-white/[0.1] hover:bg-white/[0.04]"
               >
-                <div className="flex size-10 items-center justify-center rounded-lg bg-primary/8 text-primary">
+                <div className="flex size-10 items-center justify-center rounded-lg bg-electric/10 text-electric">
                   <f.icon className="size-5" />
                 </div>
-                <h3 className="mt-4 font-medium">{f.title}</h3>
-                <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{f.text}</p>
+                <h3 className="mt-4 font-semibold text-white">{f.title}</h3>
+                <p className="mt-1.5 text-sm leading-6 text-white/35">{f.text}</p>
               </motion.div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Workflow */}
-      <section id="workflow" className="py-20">
+      {/* ═══════════════ WORKFLOW ═══════════════ */}
+      <section id="workflow" className="border-t border-white/[0.06] py-20">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <motion.div {...fadeUp} className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-semibold tracking-tight">From lead to paid, end to end</h2>
-            <p className="mt-3 text-muted-foreground">
+            <h2 className="text-3xl font-extrabold tracking-tight">From lead to paid, end to end</h2>
+            <p className="mt-3 text-white/40">
               One continuous workflow — no more sticky notes, spreadsheets, and voicemail trails.
             </p>
           </motion.div>
           <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {workflow.map((w, i) => (
-              <motion.div key={w.step} {...fadeUp} transition={{ duration: 0.4, delay: i * 0.06 }} className="relative rounded-xl border bg-card p-5">
-                <span className="text-3xl font-semibold text-primary/25">{w.step}</span>
-                <h3 className="mt-3 font-medium">{w.title}</h3>
-                <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{w.text}</p>
+              <motion.div key={w.step} {...fadeUp} transition={{ duration: 0.4, delay: i * 0.06 }} className="relative rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+                <span className="text-3xl font-extrabold text-electric/20">{w.step}</span>
+                <h3 className="mt-3 font-semibold text-white">{w.title}</h3>
+                <p className="mt-1.5 text-sm leading-6 text-white/35">{w.text}</p>
               </motion.div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Security / compliance */}
-      <section id="security" className="border-t bg-muted/30 py-20">
+      {/* ═══════════════ SECURITY ═══════════════ */}
+      <section id="security" className="border-t border-white/[0.06] py-20">
         <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-2">
           <motion.div {...fadeUp}>
-            <span className="inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
+            <span className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1 text-xs font-medium text-white/50">
               <ShieldCheck className="size-3.5" /> Security-first architecture
             </span>
-            <h2 className="mt-4 text-3xl font-semibold tracking-tight">Your data is isolated, audited, and yours</h2>
-            <p className="mt-3 leading-7 text-muted-foreground">
+            <h2 className="mt-4 text-3xl font-extrabold tracking-tight">Your data is isolated, audited, and yours</h2>
+            <p className="mt-3 leading-7 text-white/40">
               DispatchOS is built as a dispatch service — not a broker. Every organization gets
               strict tenant isolation, role-based access control, an append-only audit trail, and
-              integer-precision financial records. Rate changes and load status transitions are
-              never silently overwritten; they are history.
+              integer-precision financial records.
             </p>
             <ul className="mt-6 space-y-3 text-sm">
               {[
@@ -203,8 +214,8 @@ export default function Landing() {
                 "AI is advisory only — high-impact actions always require human approval",
               ].map((item) => (
                 <li key={item} className="flex items-start gap-2.5">
-                  <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-500" />
-                  <span className="text-muted-foreground">{item}</span>
+                  <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-[#22C55E]" />
+                  <span className="text-white/50">{item}</span>
                 </li>
               ))}
             </ul>
@@ -216,27 +227,27 @@ export default function Landing() {
               { icon: UserRound, label: "Drivers", text: "Assignments, status, and credential expiry." },
               { icon: Wallet, label: "Finance", text: "Fees, invoices, payments, outstanding balances." },
             ].map((c) => (
-              <div key={c.label} className="rounded-xl border bg-card p-5">
-                <c.icon className="size-5 text-primary" />
-                <h3 className="mt-3 text-sm font-medium">{c.label}</h3>
-                <p className="mt-1 text-sm text-muted-foreground">{c.text}</p>
+              <div key={c.label} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+                <c.icon className="size-5 text-electric" />
+                <h3 className="mt-3 text-sm font-semibold text-white">{c.label}</h3>
+                <p className="mt-1 text-sm text-white/35">{c.text}</p>
               </div>
             ))}
           </motion.div>
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="py-20">
+      {/* ═══════════════ CTA ═══════════════ */}
+      <section className="border-t border-white/[0.06] py-20">
         <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
           <motion.div {...fadeUp}>
-            <h2 className="text-3xl font-semibold tracking-tight">Ready to run your dispatch like a business?</h2>
-            <p className="mt-3 text-muted-foreground">
+            <h2 className="text-3xl font-extrabold tracking-tight">Ready to run your dispatch like a business?</h2>
+            <p className="mt-3 text-white/40">
               Sign in to your workspace. Your first carrier, truck, and load can be live in minutes.
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link to="/auth?returnTo=%2Fdashboard" className="w-full sm:w-auto">
-                <Button size="lg" className="w-full gap-2 sm:w-auto">
+                <Button size="lg" className="w-full gap-2 bg-electric hover:bg-electric/90 text-white shadow-lg shadow-electric/20 sm:w-auto">
                   Open DispatchOS <ArrowRight className="size-4" />
                 </Button>
               </Link>
@@ -245,18 +256,18 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t py-10">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 text-sm text-muted-foreground sm:flex-row sm:px-6">
+      {/* ═══════════════ FOOTER ═══════════════ */}
+      <footer className="border-t border-white/[0.06] py-10">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 text-sm text-white/30 sm:flex-row sm:px-6">
           <div className="flex items-center gap-2">
-            <div className="flex size-6 items-center justify-center rounded-md bg-primary text-[10px] font-bold text-primary-foreground">D</div>
-            <span className="font-medium text-foreground">DispatchOS</span>
+            <LogoIcon size={20} />
+            <span className="font-semibold text-white/60">DispatchOS</span>
           </div>
-          <p className="text-xs">Freight dispatch management for solo dispatchers and agencies.</p>
-          <div className="flex items-center gap-4 text-xs">
-            <a href="#" className="hover:text-foreground">Privacy</a>
-            <a href="#" className="hover:text-foreground">Terms</a>
-            <a href="#" className="hover:text-foreground">Help</a>
+          <p className="text-xs text-white/20">Freight dispatch management for solo dispatchers and agencies.</p>
+          <div className="flex items-center gap-4 text-xs text-white/25">
+            <span className="hover:text-white/40 cursor-pointer">Privacy</span>
+            <span className="hover:text-white/40 cursor-pointer">Terms</span>
+            <span className="hover:text-white/40 cursor-pointer">Help</span>
           </div>
         </div>
       </footer>

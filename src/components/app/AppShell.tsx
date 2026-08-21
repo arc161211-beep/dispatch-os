@@ -20,6 +20,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { CommandPalette } from "./CommandPalette";
+import { Logo } from "@/components/brand/Logo";
 import {
   BarChart3,
   Bell,
@@ -47,6 +48,7 @@ import {
   Users,
   UserCog,
   Wallet,
+  ChevronLeft,
 } from "lucide-react";
 
 interface NavItem {
@@ -148,11 +150,11 @@ function useNavItems() {
         title: "System",
         items: [
           { to: "/notifications", label: "Notifications", icon: Bell },
-          { to: "/users", label: "User Management", icon: UserCog },
+          { to: "/users", label: "Users", icon: UserCog },
           { to: "/integrations", label: "Integrations", icon: Plug },
           { to: "/settings", label: "Settings", icon: Settings },
           { to: "/audit", label: "Audit Log", icon: ScrollText },
-          { to: "/status", label: "System Status", icon: Activity },
+          { to: "/status", label: "Status", icon: Activity },
         ] as NavItem[],
       },
     ],
@@ -160,7 +162,7 @@ function useNavItems() {
   };
 }
 
-function NavList({ items, onNavigate }: { items: NavItem[]; onNavigate?: () => void }) {
+function NavList({ items, onNavigate, collapsed }: { items: NavItem[]; onNavigate?: () => void; collapsed?: boolean }) {
   return (
     <nav className="space-y-0.5">
       {items.map((item) => (
@@ -171,15 +173,17 @@ function NavList({ items, onNavigate }: { items: NavItem[]; onNavigate?: () => v
           onClick={onNavigate}
           className={({ isActive }) =>
             cn(
-              "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors",
+              "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-all duration-150",
+              collapsed && "justify-center px-2",
               isActive
-                ? "bg-accent text-accent-foreground"
-                : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+                ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
+                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
             )
           }
+          title={collapsed ? item.label : undefined}
         >
           <item.icon className="size-4 shrink-0" />
-          {item.label}
+          {!collapsed && item.label}
         </NavLink>
       ))}
     </nav>
@@ -208,6 +212,7 @@ export function AppShell() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [provisioning, setProvisioning] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     if (user && !user.orgId && !provisioning) {
@@ -251,56 +256,85 @@ export function AppShell() {
     <div className="flex min-h-screen bg-background">
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} canWrite={canWrite} />
 
-      {/* Desktop sidebar */}
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r bg-sidebar lg:flex">
-        <div className="flex h-14 items-center gap-2 border-b px-4">
-          <div className="flex size-7 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground">D</div>
-          <span className="text-sm font-semibold tracking-tight">DispatchOS</span>
-          {demoMode && (
-            <Badge variant="outline" className="ml-auto bg-amber-500/10 text-amber-600 dark:text-amber-400 border-transparent">Demo</Badge>
+      {/* ─── Desktop Sidebar ─── */}
+      <aside
+        className={cn(
+          "sticky top-0 hidden h-screen shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-all duration-200 lg:flex",
+          collapsed ? "w-[60px]" : "w-56",
+        )}
+      >
+        {/* Logo */}
+        <div className={cn("flex h-14 items-center border-b border-sidebar-border", collapsed ? "justify-center px-2" : "gap-2.5 px-4")}>
+          {collapsed ? (
+            <div className="flex size-8 items-center justify-center rounded-lg bg-electric/10">
+              <svg className="size-5 text-electric" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2L2 7v6c0 5.55 4.27 10.74 10 12 5.73-1.26 10-6.45 10-12V7L12 2z" />
+              </svg>
+            </div>
+          ) : (
+            <Logo size="sm" variant="full" />
           )}
         </div>
-        <div className="flex-1 space-y-5 overflow-y-auto p-3">
+
+        {/* Nav */}
+        <div className="flex-1 space-y-4 overflow-y-auto px-2 py-3">
           {groups.map((g) => (
             <div key={g.title}>
-              <p className="mb-1.5 px-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">{g.title}</p>
-              <NavList items={g.items} />
+              {!collapsed && (
+                <p className="mb-1.5 px-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-sidebar-foreground/40">
+                  {g.title}
+                </p>
+              )}
+              <NavList items={g.items} collapsed={collapsed} />
             </div>
           ))}
         </div>
-        <div className="border-t p-3">
-          <div className="flex items-center gap-2.5 rounded-lg px-2 py-1.5">
-            <Avatar className="size-8">
-              <AvatarFallback className="bg-primary/10 text-primary text-xs">{initials}</AvatarFallback>
-            </Avatar>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{user?.name ?? "User"}</p>
-              <p className="truncate text-xs capitalize text-muted-foreground">{role?.replace("_", " ")}</p>
+
+        {/* Collapse + User */}
+        <div className="border-t border-sidebar-border p-2 space-y-1">
+          <button
+            type="button"
+            onClick={() => setCollapsed(!collapsed)}
+            className="flex w-full items-center justify-center rounded-lg p-1.5 text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+          >
+            <ChevronLeft className={cn("size-4 transition-transform duration-200", collapsed && "rotate-180")} />
+          </button>
+          {!collapsed && (
+            <div className="flex items-center gap-2.5 rounded-lg px-2 py-1.5">
+              <Avatar className="size-7">
+                <AvatarFallback className="bg-electric/10 text-electric text-[10px] font-bold">{initials}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <p className="truncate text-xs font-semibold text-sidebar-foreground">{user?.name ?? "User"}</p>
+                <p className="truncate text-[10px] capitalize text-sidebar-foreground/50">{role?.replace("_", " ")}</p>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </aside>
 
+      {/* ─── Main content ─── */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Header */}
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/85 px-3 backdrop-blur sm:px-4">
+        <header className="sticky top-0 z-30 flex h-12 items-center gap-2 border-b border-border/60 bg-background/80 px-3 backdrop-blur-xl sm:px-4">
           <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="lg:hidden">
-                <Menu className="size-5" />
+              <Button variant="ghost" size="icon" className="lg:hidden size-8">
+                <Menu className="size-4" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-64 p-0">
-              <SheetHeader className="border-b px-4 py-3">
+            <SheetContent side="left" className="w-64 p-0 bg-sidebar border-sidebar-border">
+              <SheetHeader className="border-b border-sidebar-border px-4 py-3">
                 <SheetTitle className="flex items-center gap-2 text-left">
-                  <span className="flex size-6 items-center justify-center rounded-md bg-primary text-[10px] font-bold text-primary-foreground">D</span>
-                  DispatchOS
+                  <Logo size="sm" variant="full" />
                 </SheetTitle>
               </SheetHeader>
-              <div className="space-y-5 overflow-y-auto p-3">
+              <div className="space-y-4 overflow-y-auto p-3">
                 {groups.map((g) => (
                   <div key={g.title}>
-                    <p className="mb-1.5 px-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">{g.title}</p>
+                    <p className="mb-1.5 px-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-sidebar-foreground/40">
+                      {g.title}
+                    </p>
                     <NavList items={g.items} onNavigate={() => setMobileNavOpen(false)} />
                   </div>
                 ))}
@@ -308,41 +342,54 @@ export function AppShell() {
             </SheetContent>
           </Sheet>
 
+          {/* Search */}
           <button
             type="button"
             onClick={() => setPaletteOpen(true)}
-            className="flex h-9 w-full max-w-md items-center gap-2 rounded-lg border border-border/70 bg-muted/40 px-3 text-sm text-muted-foreground transition-colors hover:bg-muted/70"
+            className="flex h-8 w-full max-w-sm items-center gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 text-xs text-muted-foreground transition-all duration-150 hover:border-border hover:bg-muted/50"
           >
-            <Search className="size-4" />
-            <span className="hidden sm:inline">Search or jump to…</span>
-            <span className="ml-auto hidden items-center gap-0.5 rounded border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground sm:flex">
+            <Search className="size-3.5" />
+            <span className="hidden sm:inline">Search…</span>
+            <kbd className="ml-auto hidden rounded border border-border/60 bg-background/60 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground/70 sm:inline">
               ⌘K
-            </span>
+            </kbd>
           </button>
 
-          <div className="ml-auto flex items-center gap-1">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/notifications")} aria-label="Notifications">
+          <div className="ml-auto flex items-center gap-0.5">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate("/notifications")}
+              aria-label="Notifications"
+              className="relative size-8"
+            >
               <Bell className="size-4" />
               {(unread ?? 0) > 0 && (
-                <span className="absolute mt-[-18px] ml-[18px] flex size-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-semibold text-white">
+                <span className="absolute right-1 top-1 flex size-3.5 items-center justify-center rounded-full bg-destructive text-[8px] font-bold text-white">
                   {Math.min(unread ?? 0, 9)}
                 </span>
               )}
             </Button>
-            <Button variant="ghost" size="icon" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label="Toggle theme">
-              {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              aria-label="Toggle theme"
+              className="size-8"
+            >
+              {theme === "dark" ? <Sun className="size-3.5" /> : <Moon className="size-3.5" />}
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-full" aria-label="Account">
-                  <Avatar className="size-8">
-                    <AvatarFallback className="bg-primary/10 text-primary text-xs">{initials}</AvatarFallback>
+                <Button variant="ghost" size="icon" className="rounded-full size-8" aria-label="Account">
+                  <Avatar className="size-6">
+                    <AvatarFallback className="bg-electric/10 text-electric text-[9px] font-bold">{initials}</AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuContent align="end" className="w-52">
                 <DropdownMenuLabel>
-                  <p className="text-sm font-medium">{user?.name ?? "User"}</p>
+                  <p className="text-sm font-semibold">{user?.name ?? "User"}</p>
                   <p className="text-xs font-normal capitalize text-muted-foreground">{role?.replace("_", " ")}</p>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
@@ -350,7 +397,7 @@ export function AppShell() {
                 <DropdownMenuItem onClick={() => navigate("/integrations")}>Integrations</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive">
-                  <LogOut className="mr-2 size-4" /> Sign out
+                  <LogOut className="mr-2 size-3.5" /> Sign out
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -359,12 +406,12 @@ export function AppShell() {
 
         {/* Demo banner */}
         {demoMode && (
-          <div className="border-b bg-amber-500/10 px-4 py-2 text-center text-xs font-medium text-amber-700 dark:text-amber-300">
-            Demo data loaded — these records are marked as demo and can be cleared in Settings.
+          <div className="border-b border-[#F5A623]/20 bg-[#F5A623]/5 px-4 py-1.5 text-center text-[11px] font-semibold text-[#F5A623]">
+            DEMO MODE — Test data loaded
           </div>
         )}
 
-        <main className="mx-auto w-full max-w-7xl flex-1 p-4 sm:p-6 lg:p-8">
+        <main className="mx-auto w-full max-w-7xl flex-1 p-4 sm:p-5 lg:p-6">
           <Outlet />
         </main>
       </div>
