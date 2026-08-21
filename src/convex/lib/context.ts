@@ -10,7 +10,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError } from "convex/values";
 import type { ActionCtx, MutationCtx, QueryCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
-import type { Role } from "../constants";
+import { REPORTS_ROLES, type Role } from "../constants";
 
 export interface Session {
   userId: Id<"users">;
@@ -72,6 +72,11 @@ export function isWriteRole(role: Role): boolean {
   return role === "admin" || role === "dispatcher" || role === "operations";
 }
 
+/** Reports are restricted to admin-tier + operations/dispatcher. carrier_admin and driver are blocked. */
+export function isReportRole(role: Role): boolean {
+  return (REPORTS_ROLES as readonly string[]).includes(role);
+}
+
 export function isAdminRole(role: Role): boolean {
   return role === "super_admin" || role === "admin";
 }
@@ -90,6 +95,18 @@ export async function requireAdmin(ctx: QueryCtx | MutationCtx): Promise<Session
   const s = await requireOrg(ctx);
   if (!isAdminRole(s.role)) {
     throw new ConvexError("Administrator permission required.");
+  }
+  return s;
+}
+
+/**
+ * Requires a report-eligible role.
+ * carrier_admin, driver, and read_only are blocked from reports.
+ */
+export async function requireReportRole(ctx: QueryCtx | MutationCtx): Promise<Session> {
+  const s = await requireOrg(ctx);
+  if (!isReportRole(s.role)) {
+    throw new ConvexError("You do not have permission to access reports.");
   }
   return s;
 }

@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
-import { loadScope, requireOrg } from "./lib/context";
+import { loadScope, requireReportRole } from "./lib/context";
 import { TERMINAL_LOAD_STATUSES, LoadStatus } from "./constants";
 import { getFinancialVisibility, requiresFinancialFiltering } from "./lib/visibility";
 
@@ -17,7 +17,7 @@ async function collectAll(ctx: any, table: string, orgId: string) {
 export const operations = query({
   args: { from: v.optional(v.number()), to: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    const s = await requireOrg(ctx);
+    const s = await requireReportRole(ctx);
     const scope = loadScope(s);
     const [loads, carriers, trucks, drivers, brokers] = await Promise.all([
       collectAll(ctx, "loads", s.orgId),
@@ -68,7 +68,7 @@ export const operations = query({
 export const financial = query({
   args: { from: v.optional(v.number()), to: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    const s = await requireOrg(ctx);
+    const s = await requireReportRole(ctx);
     const scope = loadScope(s);
     const [loads, invoices] = await Promise.all([collectAll(ctx, "loads", s.orgId), collectAll(ctx, "invoices", s.orgId)]);
     const from = args.from ?? 0;
@@ -106,7 +106,7 @@ export const financial = query({
 export const crm = query({
   args: {},
   handler: async (ctx) => {
-    const s = await requireOrg(ctx);
+    const s = await requireReportRole(ctx);
     const [leads, carriers] = await Promise.all([collectAll(ctx, "leads", s.orgId), collectAll(ctx, "carriers", s.orgId)]);
     const byStatus: Record<string, number> = {};
     const bySource: Record<string, number> = {};
@@ -130,7 +130,7 @@ export const crm = query({
 export const dispatcher = query({
   args: { from: v.optional(v.number()), to: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    const s = await requireOrg(ctx);
+    const s = await requireReportRole(ctx);
     const scope = loadScope(s);
     const [loads, carriers, invoices] = await Promise.all([collectAll(ctx, "loads", s.orgId), collectAll(ctx, "carriers", s.orgId), collectAll(ctx, "invoices", s.orgId)]);
     const from = args.from ?? 0;

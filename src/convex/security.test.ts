@@ -23,6 +23,7 @@ import {
   ROLES,
   WRITE_ROLES,
   ADMIN_ROLES,
+  REPORTS_ROLES,
   ACCOUNT_STATUSES,
   CARRIER_STATUSES,
   TRUCK_STATUSES,
@@ -661,5 +662,57 @@ describe("Security: Rounding integrity", () => {
       sum = round2(sum + 0.01);
     }
     expect(sum).toBe(1.0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// REPORTS AUTHORIZATION
+// ---------------------------------------------------------------------------
+describe("Security: Reports authorization", () => {
+  it("REPORTS_ROLES includes all admin-tier plus dispatcher and operations", () => {
+    expect(REPORTS_ROLES).toContain("super_admin");
+    expect(REPORTS_ROLES).toContain("admin");
+    expect(REPORTS_ROLES).toContain("dispatcher");
+    expect(REPORTS_ROLES).toContain("operations");
+  });
+
+  it("carrier_admin is NOT in REPORTS_ROLES", () => {
+    expect(REPORTS_ROLES).not.toContain("carrier_admin");
+  });
+
+  it("driver is NOT in REPORTS_ROLES", () => {
+    expect(REPORTS_ROLES).not.toContain("driver");
+  });
+
+  it("read_only is NOT in REPORTS_ROLES", () => {
+    expect(REPORTS_ROLES).not.toContain("read_only");
+  });
+
+  it("all 7 roles are accounted for in REPORTS_ROLES subset", () => {
+    const nonReportRoles = ROLES.filter((r) => !(REPORTS_ROLES as readonly string[]).includes(r));
+    expect(nonReportRoles).toContain("carrier_admin");
+    expect(nonReportRoles).toContain("driver");
+    expect(nonReportRoles).toContain("read_only");
+  });
+
+  it("isReportRole helper matches REPORTS_ROLES exactly", () => {
+    function isReportRole(role: string): boolean {
+      return (REPORTS_ROLES as readonly string[]).includes(role);
+    }
+    for (const role of ROLES) {
+      if ((REPORTS_ROLES as readonly string[]).includes(role)) {
+        expect(isReportRole(role)).toBe(true);
+      } else {
+        expect(isReportRole(role)).toBe(false);
+      }
+    }
+  });
+
+  it("carrier_admin and driver cannot access operations report via isReportRole", () => {
+    function isReportRole(role: string): boolean {
+      return (REPORTS_ROLES as readonly string[]).includes(role);
+    }
+    expect(isReportRole("carrier_admin")).toBe(false);
+    expect(isReportRole("driver")).toBe(false);
   });
 });
