@@ -44,7 +44,7 @@ export function validateFileMeta(opts: {
   if (!raw) throw new ConvexError("Upload failed: file name is required.");
   const clean = raw.replace(/[^A-Za-z0-9._\- ()]/g, "_");
   const ext = clean.split(".").pop()?.toLowerCase() ?? "";
-  if (ext && !DOC_ALLOWED_EXTENSIONS.includes(ext)) {
+  if (ext && !(DOC_ALLOWED_EXTENSIONS as readonly string[]).includes(ext)) {
     throw new ConvexError(`File type ".${ext}" is not allowed. Allowed: ${DOC_ALLOWED_EXTENSIONS.join(", ")}.`);
   }
   if (opts.size && opts.size > DOC_MAX_BYTES) {

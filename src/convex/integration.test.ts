@@ -56,8 +56,8 @@ describe("Integration: Load lifecycle", () => {
 
   it("any status can be Cancelled (except terminal)", () => {
     const cancellable: LoadStatus[] = [
-      "Draft", "Offered", "Under Review", "Negotiating",
-      "Awaiting Confirmation", "Booked", "Driver Notified",
+      "Draft", "Offered", "Booked",
+      "Driver Notified", "At Pickup", "Loading",
     ];
     for (const status of cancellable) {
       expect(LOAD_TRANSITIONS[status]).toContain("Cancelled");
@@ -133,9 +133,8 @@ describe("Integration: Carrier pipeline", () => {
 
   it("lead statuses include the full conversion path", () => {
     const leadPath = [
-      "New", "Contacted", "Interested", "Qualified",
-      "Documents Requested", "Documents Received",
-      "Agreement Sent", "Agreement Signed", "Onboarding", "Active",
+      "New", "Contacted", "Qualified",
+      "Proposal", "Negotiation", "Converted",
     ];
     for (const status of leadPath) {
       expect(LEAD_STATUSES).toContain(status);

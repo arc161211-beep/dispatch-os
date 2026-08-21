@@ -15,7 +15,7 @@ export const getAll = query({
     const stored = await ctx.db.query("integrations").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).collect();
     const env = process.env as Record<string, string | undefined>;
     return INTEGRATION_PROVIDERS.map((p) => {
-      const configured = p.envs.some((e) => !!env[e]);
+      const configured = p.envs.some((e: string) => !!env[e]);
       const record = stored.find((i) => i.provider === p.key);
       return {
         key: p.key,

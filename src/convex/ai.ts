@@ -433,7 +433,7 @@ export const resolveSuggestedAction = mutation({
         orgId: s.orgId as never,
         title: String(p.title ?? "AI suggested task").slice(0, 300),
         description: p.description ? String(p.description).slice(0, 4000) : undefined,
-        type: "General",
+        type: "Other",
         entityType: p.entityType ? String(p.entityType) : undefined,
         entityId: p.entityId ? String(p.entityId) : undefined,
         status: "Pending",

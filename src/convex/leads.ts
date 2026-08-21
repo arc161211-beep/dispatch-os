@@ -126,7 +126,7 @@ export const setStatus = mutation({
     const from = lead.status;
     await ctx.db.patch(args.id, { status: args.status });
     await audit(ctx, s, { action: "lead.status.changed", entity: "lead", entityId: args.id, metadata: { from, to: args.status } });
-    if (args.status === "Active" && !lead.convertedToCarrierId) {
+    if (args.status === "Qualified" && !lead.convertedToCarrierId) {
       const conv = await ctx.db.insert("conversations", {
         orgId: s.orgId as never,
         title: `Lead: ${lead.companyName}`,
@@ -175,13 +175,13 @@ export const convertToCarrier = mutation({
       feeMinCents: feeDefaults.feeMinCents,
       feeMaxCents: feeDefaults.feeMaxCents,
       flatFeeCents: feeDefaults.flatFeeCents,
-      status: args.onboarding ? "Onboarding" : "Prospect",
+      status: args.onboarding ? "Onboarding" as const : "Prospect" as const,
       agreementStatus: "None",
     })) as string;
 
     await ctx.db.patch(args.id, {
       convertedToCarrierId: carrierId as never,
-      status: "Active",
+      status: "Converted",
     });
 
     // Carry conversation over to the carrier.
@@ -248,7 +248,7 @@ export const importLeads = mutation({
         usdot: r.usdot?.trim() || undefined,
         fleetSize: r.fleetSize,
         equipment: parseTags(r.equipment),
-        source: (LEAD_SOURCES as readonly string[]).includes(r.source ?? "") ? (r.source as never) : "Manual",
+        source: (LEAD_SOURCES as readonly string[]).includes(r.source ?? "") ? (r.source as never) : "manual",
         status: "New",
       });
       inserted++;

@@ -3,6 +3,10 @@
 // tests; never contains secrets).
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Roles & Accounts
+// ---------------------------------------------------------------------------
+
 export const ROLES = [
   "super_admin",
   "admin",
@@ -14,7 +18,6 @@ export const ROLES = [
 ] as const;
 export type Role = (typeof ROLES)[number];
 
-/** Roles that can create/update operational records (carriers, loads, ...). */
 export const ACCOUNT_STATUSES = ["active", "suspended", "revoked", "invited"] as const;
 export type AccountStatus = (typeof ACCOUNT_STATUSES)[number];
 
@@ -30,3 +33,217 @@ export const WRITE_ROLES: Role[] = ["admin", "dispatcher", "operations"];
 export const ADMIN_ROLES: Role[] = ["super_admin", "admin"];
 /** Roles that can access reports (operations, financial, CRM, dispatcher). */
 export const REPORTS_ROLES: Role[] = ["super_admin", "admin", "dispatcher", "operations"];
+
+// ---------------------------------------------------------------------------
+// Fee Types — must match FeeConfig in lib/finance.ts
+// ---------------------------------------------------------------------------
+
+export const FEE_TYPES = ["percentage", "flat"] as const;
+export type FeeType = (typeof FEE_TYPES)[number];
+
+// ---------------------------------------------------------------------------
+// Load Lifecycle
+// ---------------------------------------------------------------------------
+
+export const LOAD_STATUSES = [
+  "Draft",
+  "Offered",
+  "Under Review",
+  "Negotiating",
+  "Awaiting Confirmation",
+  "Booked",
+  "Driver Notified",
+  "At Pickup",
+  "Loading",
+  "Loaded",
+  "In Transit",
+  "At Delivery",
+  "Delivered",
+  "POD Pending",
+  "Completed",
+  "Cancelled",
+  "TONU Requested",
+  "Disputed",
+] as const;
+
+export type LoadStatus = (typeof LOAD_STATUSES)[number];
+
+export const LOAD_TRANSITIONS: Record<LoadStatus, LoadStatus[]> = {
+  "Draft":                   ["Offered", "Cancelled"],
+  "Offered":                 ["Booked", "Cancelled", "Disputed"],
+  "Under Review":            ["Offered", "Cancelled", "Disputed"],
+  "Negotiating":             ["Booked", "Cancelled", "Disputed"],
+  "Awaiting Confirmation":   ["Booked", "Cancelled", "Disputed"],
+  "Booked":                  ["Driver Notified", "TONU Requested", "Cancelled", "Disputed"],
+  "Driver Notified":         ["At Pickup", "Cancelled", "Disputed"],
+  "At Pickup":               ["Loading", "TONU Requested", "Cancelled", "Disputed"],
+  "Loading":                 ["Loaded", "Cancelled", "Disputed"],
+  "Loaded":                  ["In Transit", "Cancelled", "Disputed"],
+  "In Transit":              ["At Delivery", "Cancelled", "Disputed"],
+  "At Delivery":             ["Delivered", "Cancelled", "Disputed"],
+  "Delivered":               ["POD Pending"],
+  "POD Pending":             ["Completed", "Disputed"],
+  "Completed":               ["Disputed"],
+  "Cancelled":               ["Disputed"],
+  "TONU Requested":          ["Cancelled", "Disputed"],
+  "Disputed":                ["Completed", "Cancelled", "Booked"],
+};
+
+export const TERMINAL_LOAD_STATUSES: readonly LoadStatus[] = ["Completed", "Cancelled"];
+
+// ---------------------------------------------------------------------------
+// Load Sources
+// ---------------------------------------------------------------------------
+
+export const LOAD_SOURCES = ["manual", "csv", "email", "api", "load_board", "other"] as const;
+export type LoadSource = (typeof LOAD_SOURCES)[number];
+
+// ---------------------------------------------------------------------------
+// Carriers
+// ---------------------------------------------------------------------------
+
+export const CARRIER_STATUSES = ["Active", "Onboarding", "Suspended", "Inactive", "Prospect"] as const;
+export type CarrierStatus = (typeof CARRIER_STATUSES)[number];
+
+// ---------------------------------------------------------------------------
+// Trucks
+// ---------------------------------------------------------------------------
+
+export const TRUCK_STATUSES = ["Available", "In Transit", "Booked", "Out of Service", "Maintenance"] as const;
+export type TruckStatus = (typeof TRUCK_STATUSES)[number];
+
+// ---------------------------------------------------------------------------
+// Drivers
+// ---------------------------------------------------------------------------
+
+export const DRIVER_STATUSES = ["Available", "On Load", "Off Duty", "On Leave"] as const;
+export type DriverStatus = (typeof DRIVER_STATUSES)[number];
+
+// ---------------------------------------------------------------------------
+// Brokers
+// ---------------------------------------------------------------------------
+
+export const BROKER_STATUSES = ["New", "Active", "Inactive", "Suspended", "Under Review"] as const;
+export type BrokerStatus = (typeof BROKER_STATUSES)[number];
+
+// ---------------------------------------------------------------------------
+// Leads
+// ---------------------------------------------------------------------------
+
+export const LEAD_STATUSES = ["New", "Contacted", "Qualified", "Proposal", "Negotiation", "Active", "Converted", "Lost"] as const;
+export type LeadStatus = (typeof LEAD_STATUSES)[number];
+
+export const LEAD_SOURCES = ["manual", "referral", "website", "cold_call", "social_media", "advertisement", "other"] as const;
+export type LeadSource = (typeof LEAD_SOURCES)[number];
+
+// ---------------------------------------------------------------------------
+// Messages
+// ---------------------------------------------------------------------------
+
+export const MESSAGE_STATUSES = ["unread", "read", "needs_reply", "resolved", "archived"] as const;
+export type MessageStatus = (typeof MESSAGE_STATUSES)[number];
+
+export const MESSAGE_PRIORITIES = ["low", "normal", "urgent"] as const;
+export type MessagePriority = (typeof MESSAGE_PRIORITIES)[number];
+
+export const CONVERSATION_TYPES = ["broker", "carrier", "driver", "lead", "internal", "system"] as const;
+export type ConversationType = (typeof CONVERSATION_TYPES)[number];
+
+// ---------------------------------------------------------------------------
+// Tasks
+// ---------------------------------------------------------------------------
+
+export const TASK_STATUSES = ["Pending", "In Progress", "Completed", "Cancelled"] as const;
+export type TaskStatus = (typeof TASK_STATUSES)[number];
+
+export const TASK_PRIORITIES = ["Low", "Normal", "High", "Urgent"] as const;
+export type TaskPriority = (typeof TASK_PRIORITIES)[number];
+
+export const TASK_TYPES = ["Follow Up", "Call", "Email", "Document", "Payment", "Other"] as const;
+export type TaskType = (typeof TASK_TYPES)[number];
+
+// ---------------------------------------------------------------------------
+// Documents
+// ---------------------------------------------------------------------------
+
+export const DOCUMENT_TYPES = [
+  "BOL",
+  "Insurance",
+  "Agreement",
+  "W-9",
+  "POD",
+  "Rate Confirmation",
+  "Invoice",
+  "Carrier Agreement",
+  "Other",
+] as const;
+export type DocumentType = (typeof DOCUMENT_TYPES)[number];
+
+export const DOC_ALLOWED_EXTENSIONS: readonly string[] = [
+  "pdf", "png", "jpg", "jpeg", "gif", "bmp",
+  "doc", "docx",
+  "xls", "xlsx",
+  "csv", "txt",
+];
+
+export const DOC_MAX_BYTES = 20 * 1024 * 1024; // 20 MB
+
+export const LOAD_DOC_CHECKLIST = [
+  "Rate Confirmation",
+  "BOL",
+  "POD",
+  "Invoice",
+] as const;
+
+// ---------------------------------------------------------------------------
+// Equipment
+// ---------------------------------------------------------------------------
+
+export const EQUIPMENT_TYPES = [
+  "Dry Van",
+  "Reefer",
+  "Flatbed",
+  "Step Deck",
+  "Lowboy",
+  "Tanker",
+  "Car Hauler",
+  "Box Truck",
+  "Other",
+] as const;
+
+// ---------------------------------------------------------------------------
+// Invoices
+// ---------------------------------------------------------------------------
+
+export const INVOICE_STATUSES = ["Draft", "Sent", "Paid", "Partially Paid", "Overdue", "Cancelled", "Disputed"] as const;
+export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
+
+// ---------------------------------------------------------------------------
+// AI
+// ---------------------------------------------------------------------------
+
+export const AI_CATEGORIES = [
+  "load_opportunity",
+  "rate_inquiry",
+  "status_update",
+  "document_request",
+  "payment",
+  "general",
+  "other",
+] as const;
+export type AiCategory = (typeof AI_CATEGORIES)[number];
+
+// ---------------------------------------------------------------------------
+// Integration Providers (for System Status page)
+// ---------------------------------------------------------------------------
+
+export const INTEGRATION_PROVIDERS = [
+  { key: "ai", label: "AI Assistant (Nemotron)", envs: ["NVIDIA_API_KEY", "NVIDIA_BASE_URL", "NVIDIA_MODEL"] },
+  { key: "email", label: "Email Provider", envs: ["SMTP_HOST", "SMTP_USER"] },
+  { key: "sms", label: "SMS / WhatsApp", envs: ["TWILIO_SID"] },
+  { key: "maps", label: "Maps / Geocoding", envs: ["MAPBOX_TOKEN", "GOOGLE_MAPS_KEY"] },
+  { key: "loadboard", label: "Load Board API", envs: ["DAT_API_KEY"] },
+  { key: "payments", label: "Payment Gateway", envs: ["STRIPE_SECRET_KEY"] },
+  { key: "storage", label: "File Storage", envs: ["S3_BUCKET"] },
+  { key: "signature", label: "E-Signature", envs: ["DOCUSIGN_KEY"] },
+] as const;
