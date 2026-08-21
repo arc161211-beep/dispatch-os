@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
+import { motion } from "framer-motion";
 import { api } from "@/convex/_generated/api";
 import { INVOICE_STATUSES } from "@/convex/constants";
 import { useCanWrite, useTimezone } from "@/hooks/use-app";
@@ -33,8 +34,7 @@ export default function Finance() {
   const overdueCount = (invoices ?? []).filter((i) => i.effectiveStatus === "Overdue").length;
 
   const handlePayment = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!payDialog) return;
+    e.preventDefault(); if (!payDialog) return;
     const fd = new FormData(e.currentTarget);
     try {
       await recordPayment({
@@ -62,7 +62,7 @@ export default function Finance() {
   };
 
   const handleStatus = async (inv: InvoiceType, s: string) => {
-    try {      await updateStatus({ id: inv._id as any, status: s as never }); toast.success(`Invoice → ${s}`); } catch (e) { toast.error(errorMessage(e)); }
+    try { await updateStatus({ id: inv._id as any, status: s as never }); toast.success(`Invoice → ${s}`); } catch (e) { toast.error(errorMessage(e)); }
   };
 
   const columns: Column<InvoiceType>[] = [
@@ -84,16 +84,24 @@ export default function Finance() {
     <div className="space-y-6">
       <PageHeader title="Finance" description="Invoices and payment tracking"
         actions={canWrite && <Button size="sm" className="gap-1.5" onClick={() => setNewInvDialog(true)}><Plus className="size-3.5" /> New invoice</Button>} />
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+
+      {/* Premium KPI cards */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+      >
         <StatCard label="Outstanding" value={<Money cents={totalOutstanding} />} tone={totalOutstanding > 0 ? "warn" : "good"} icon={<Wallet className="size-4" />} />
-        <StatCard label="Paid" value={<Money cents={totalPaid} />} tone="good" />
+        <StatCard label="Paid" value={<Money cents={totalPaid} />} tone="good" icon={<CreditCard className="size-4" />} />
         <StatCard label="Overdue" value={overdueCount} tone={overdueCount > 0 ? "bad" : "default"} />
         <StatCard label="Total invoices" value={invoices?.length ?? 0} />
-      </div>
+      </motion.div>
+
       <SelectInput value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full sm:w-48">
         <option value="">All statuses</option>
         {INVOICE_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
       </SelectInput>
+
       {invoices === undefined ? <LoadingState /> : (
         <ResponsiveTable columns={columns} rows={invoices} getKey={(i) => i._id}
           empty={<EmptyState icon={<Wallet className="size-6" />} title="No invoices" description="Invoices are auto-created when loads are completed, or you can create them manually." action={canWrite ? <Button size="sm" onClick={() => setNewInvDialog(true)}><Plus className="size-3.5" /> New invoice</Button> : undefined} />} />

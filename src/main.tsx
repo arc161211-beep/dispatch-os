@@ -44,11 +44,14 @@ const PortalCarrier = lazy(() => import("./pages/PortalCarrier.tsx"));
 const UserManagement = lazy(() => import("./pages/UserManagement.tsx"));
 const StatusPage = lazy(() => import("./pages/Status.tsx"));
 
-// Simple loading fallback for route transitions
+// Premium loading fallback for route transitions
 function RouteLoading() {
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="animate-pulse text-muted-foreground">Loading…</div>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background">
+      <div className="relative mb-4">
+        <div className="size-8 rounded-full border-2 border-[#4F8CFF]/20 border-t-[#4F8CFF] animate-spin" />
+      </div>
+      <p className="text-xs font-medium text-muted-foreground animate-pulse">Loading…</p>
     </div>
   );
 }

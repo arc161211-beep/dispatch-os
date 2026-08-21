@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useQuery } from "convex/react";
+import { motion } from "framer-motion";
 import { api } from "@/convex/_generated/api";
 import { PageHeader, StatCard, SectionCard, Money, LoadingState } from "@/components/app/shared";
 import { BarChart3, TrendingUp, Users, DollarSign } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
-const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16"];
+const COLORS = ["#4F8CFF", "#22C55E", "#F5A623", "#EF4444", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16"];
 
 export default function Reports() {
   const [tab, setTab] = useState<"operations" | "financial" | "crm" | "dispatcher">("operations");
@@ -19,12 +20,12 @@ export default function Reports() {
       <PageHeader title="Reports" description="Operational and financial analytics" />
       <div className="flex gap-2 flex-wrap">
         {(["operations", "financial", "crm", "dispatcher"] as const).map((t) => (
-          <button key={t} onClick={() => setTab(t)} className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === t ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}>{t.charAt(0).toUpperCase() + t.slice(1)}</button>
+          <button key={t} onClick={() => setTab(t)} className={`rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 ${tab === t ? "bg-[#4F8CFF] text-white shadow-lg shadow-[#4F8CFF]/20" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}>{t.charAt(0).toUpperCase() + t.slice(1)}</button>
         ))}
       </div>
 
       {tab === "operations" && (ops === undefined ? <LoadingState /> : (
-        <div className="space-y-4">
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatCard label="Loads created" value={ops.loadsCreated} icon={<BarChart3 className="size-4" />} />
             <StatCard label="Completed" value={ops.completedLoads} tone="good" />
@@ -39,7 +40,7 @@ export default function Reports() {
                     <XAxis dataKey="status" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} />
                     <Tooltip />
-                    <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="count" fill="#4F8CFF" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -58,11 +59,11 @@ export default function Reports() {
               )}
             </SectionCard>
           </div>
-        </div>
+        </motion.div>
       ))}
 
       {tab === "financial" && (fin === undefined ? <LoadingState /> : (
-        <div className="space-y-4">
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             <StatCard label="Gross revenue" value={<Money cents={fin.grossLoadRevenueCents} />} icon={<DollarSign className="size-4" />} />
             <StatCard label="Dispatcher revenue" value={<Money cents={fin.dispatcherRevenueCents} />} tone="accent" />
@@ -82,11 +83,11 @@ export default function Reports() {
               </ResponsiveContainer>
             </div>
           </SectionCard>
-        </div>
+        </motion.div>
       ))}
 
       {tab === "crm" && (crm === undefined ? <LoadingState /> : (
-        <div className="space-y-4">
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatCard label="Total leads" value={crm.totalLeads} icon={<Users className="size-4" />} />
             <StatCard label="Converted" value={crm.converted} tone="good" />
@@ -117,11 +118,11 @@ export default function Reports() {
               </div>
             </SectionCard>
           </div>
-        </div>
+        </motion.div>
       ))}
 
       {tab === "dispatcher" && (disp === undefined ? <LoadingState /> : (
-        <div className="space-y-4">
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatCard label="Loads booked" value={disp.loadsBooked} icon={<TrendingUp className="size-4" />} />
             <StatCard label="Completed" value={disp.loadsCompleted} tone="good" />
@@ -136,13 +137,13 @@ export default function Reports() {
                     <XAxis dataKey="carrierName" tick={{ fontSize: 10 }} />
                     <YAxis tick={{ fontSize: 11 }} />
                     <Tooltip />
-                    <Bar dataKey="loads" fill="#10b981" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="loads" fill="#22C55E" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             )}
           </SectionCard>
-        </div>
+        </motion.div>
       ))}
     </div>
   );

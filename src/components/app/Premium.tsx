@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 interface KpiCardProps {
   icon: ReactNode;
   label: string;
-  value: string | number;
+  value: ReactNode;
   subtitle?: string;
   trend?: { value: number; label: string };
   href?: string;
