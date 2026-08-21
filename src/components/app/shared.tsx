@@ -12,7 +12,6 @@ import type { ReactNode } from "react";
 // ---------------------------------------------------------------------------
 // Page header
 // ---------------------------------------------------------------------------
-
 export function PageHeader({
   title,
   description,
@@ -23,10 +22,10 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-        {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
+        <h1 className="text-xl font-bold tracking-tight">{title}</h1>
+        {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
@@ -34,9 +33,8 @@ export function PageHeader({
 }
 
 // ---------------------------------------------------------------------------
-// Stat card
+// Stat card — premium
 // ---------------------------------------------------------------------------
-
 export function StatCard({
   label,
   value,
@@ -52,39 +50,42 @@ export function StatCard({
 }) {
   const tones = {
     default: "text-foreground",
-    good: "text-emerald-600 dark:text-emerald-400",
-    warn: "text-amber-600 dark:text-amber-400",
-    bad: "text-red-600 dark:text-red-400",
+    good: "text-[#22C55E]",
+    warn: "text-[#F5A623]",
+    bad: "text-destructive",
     accent: "text-primary",
   };
   return (
-    <Card className="shadow-none border-border/70">
-      <CardContent className="p-5">
+    <Card className="border-border/50 bg-card shadow-none card-hover">
+      <CardContent className="p-4">
         <div className="flex items-start justify-between gap-2">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-          {icon && <div className="text-muted-foreground">{icon}</div>}
+          {icon && (
+            <div className={cn("flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary")}>
+              {icon}
+            </div>
+          )}
+          {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
         </div>
-        <p className={cn("mt-2 text-2xl font-semibold tracking-tight tabular-nums", tones[tone])}>{value}</p>
-        {sub && <p className="mt-1 text-xs text-muted-foreground">{sub}</p>}
+        <p className={cn("mt-2.5 text-2xl font-bold tracking-tight tabular-nums", tones[tone])}>{value}</p>
+        <p className="mt-0.5 text-xs font-medium text-muted-foreground">{label}</p>
       </CardContent>
     </Card>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Status badge
+// Status badge — premium
 // ---------------------------------------------------------------------------
-
 export function StatusBadge({ status, className }: { status: string | null | undefined; className?: string }) {
   if (!status) return null;
-  return <Badge variant="outline" className={cn("font-medium", statusClass(status), className)}>{status}</Badge>;
+  return <Badge variant="outline" className={cn("font-medium text-[11px] rounded-full", statusClass(status), className)}>{status}</Badge>;
 }
 
 export function NextActionPill({ action }: { action: NextAction }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
+        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold",
         toneClass(action.tone),
       )}
     >
@@ -101,18 +102,16 @@ export function useNextAction(type: string, record: Parameters<typeof nextAction
 // ---------------------------------------------------------------------------
 // Money
 // ---------------------------------------------------------------------------
-
 export function Money({ cents, currency, className }: { cents: number | null | undefined; currency?: string; className?: string }) {
-  return <span className={cn("tabular-nums", className)}>{formatMoney(cents, currency)}</span>;
+  return <span className={cn("tabular-nums font-semibold", className)}>{formatMoney(cents, currency)}</span>;
 }
 
 // ---------------------------------------------------------------------------
 // Key/value row
 // ---------------------------------------------------------------------------
-
 export function KV({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
   return (
-    <div className={cn("flex items-start justify-between gap-4 py-1.5", className)}>
+    <div className={cn("flex items-start justify-between gap-4 py-2 border-b border-border/40 last:border-0", className)}>
       <dt className="text-sm text-muted-foreground">{label}</dt>
       <dd className="text-sm font-medium text-right">{children}</dd>
     </div>
@@ -120,14 +119,13 @@ export function KV({ label, children, className }: { label: string; children: Re
 }
 
 // ---------------------------------------------------------------------------
-// Loading / empty / error states
+// Loading / empty / error states — premium
 // ---------------------------------------------------------------------------
-
 export function LoadingState({ label = "Loading…" }: { label?: string }) {
   return (
-    <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
-      <Spinner className="size-4" />
-      {label}
+    <div className="flex flex-col items-center justify-center gap-3 py-20 text-sm text-muted-foreground">
+      <Spinner className="size-5 text-primary" />
+      <span className="text-xs">{label}</span>
     </div>
   );
 }
@@ -136,7 +134,7 @@ export function EmptyState({
   title,
   description,
   action,
-  icon = <Inbox className="size-6" />,
+  icon = <Inbox className="size-5" />,
 }: {
   title: string;
   description?: string;
@@ -144,11 +142,11 @@ export function EmptyState({
   icon?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed px-6 py-14 text-center">
-      <div className="flex size-10 items-center justify-center rounded-lg bg-muted text-muted-foreground">{icon}</div>
+    <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border/60 bg-muted/20 px-6 py-16 text-center">
+      <div className="flex size-11 items-center justify-center rounded-2xl bg-muted text-muted-foreground">{icon}</div>
       <div>
-        <p className="font-medium">{title}</p>
-        {description && <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">{description}</p>}
+        <p className="text-sm font-semibold">{title}</p>
+        {description && <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">{description}</p>}
       </div>
       {action && <div className="mt-1">{action}</div>}
     </div>
@@ -157,12 +155,12 @@ export function EmptyState({
 
 export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-red-300/50 bg-red-500/5 px-6 py-12 text-center">
-      <AlertTriangle className="size-6 text-red-500" />
-      <p className="text-sm font-medium">Something went wrong</p>
-      <p className="max-w-sm text-sm text-muted-foreground">{message}</p>
+    <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-destructive/30 bg-destructive/5 px-6 py-14 text-center">
+      <AlertTriangle className="size-5 text-destructive" />
+      <p className="text-sm font-semibold">Something went wrong</p>
+      <p className="max-w-sm text-xs text-muted-foreground">{message}</p>
       {onRetry && (
-        <Button variant="outline" size="sm" onClick={onRetry}>
+        <Button variant="outline" size="sm" onClick={onRetry} className="mt-1">
           Try again
         </Button>
       )}
@@ -193,22 +191,21 @@ export function QueryState<T>({
 }
 
 // ---------------------------------------------------------------------------
-// Section card
+// Section card — premium
 // ---------------------------------------------------------------------------
-
 export function SectionCard({ title, description, actions, children, className }: { title?: string; description?: string; actions?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <Card className={cn("shadow-none border-border/70", className)}>
+    <Card className={cn("border-border/50 bg-card shadow-none", className)}>
       {(title || actions) && (
-        <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
+        <CardHeader className="flex-row items-center justify-between space-y-0 pb-3 px-4 pt-4">
           <div>
-            <CardTitle className="text-base">{title}</CardTitle>
-            {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</CardTitle>
+            {description && <p className="mt-0.5 text-[11px] text-muted-foreground/70">{description}</p>}
           </div>
           {actions}
         </CardHeader>
       )}
-      <CardContent className={cn(title && "pt-0")}>{children}</CardContent>
+      <CardContent className={cn(title && "pt-0", "px-4 pb-4")}>{children}</CardContent>
     </Card>
   );
 }
@@ -216,7 +213,6 @@ export function SectionCard({ title, description, actions, children, className }
 // ---------------------------------------------------------------------------
 // Confirm button (destructive actions)
 // ---------------------------------------------------------------------------
-
 export function ConfirmButton({
   trigger,
   title,
@@ -262,7 +258,6 @@ export function ConfirmButton({
 // ---------------------------------------------------------------------------
 // Query error hook helper
 // ---------------------------------------------------------------------------
-
 export function errorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
   if (typeof e === "object" && e !== null && "message" in e) return String((e as { message: unknown }).message);
