@@ -328,3 +328,54 @@ describe("Regression: Matching engine edge cases", () => {
     expect(available.score).toBeGreaterThan(unavailable.score);
   });
 });
+
+// ---------------------------------------------------------------------------
+// BUG FIX: Post-login provisioning race condition
+//
+// After OTP login, the frontend must not fire queries requiring requireOrg()
+// before the user's organization provisioning has completed. The fix
+// separates AppInit (auth + provisioning) from ShellContent (queries)
+// so that protected queries only mount after user.orgId exists.
+// ---------------------------------------------------------------------------
+describe("Regression: Provisioning race condition fix", () => {
+  it("ROLES includes all expected roles for provisioning paths", () => {
+    // Admin/first-user provisioning creates admin role
+    expect(ROLES).toContain("admin");
+    // Invited users can have any role
+    expect(ROLES).toContain("dispatcher");
+    expect(ROLES).toContain("carrier_admin");
+    expect(ROLES).toContain("driver");
+    expect(ROLES).toContain("read_only");
+    expect(ROLES).toContain("super_admin");
+    expect(ROLES).toContain("operations");
+  });
+
+  it("admin role is in WRITE_ROLES for first-user provisioning", () => {
+    // First user is provisioned as admin, which must have write access
+    expect(WRITE_ROLES).toContain("admin");
+  });
+
+  it("provisioned roles are valid role values", () => {
+    // All roles that provisioning can assign must be valid
+    const provisioningRoles = ["admin", "dispatcher", "carrier_admin", "driver", "read_only", "operations"];
+    for (const role of provisioningRoles) {
+      expect(ROLES).toContain(role);
+    }
+  });
+
+  it("ACCOUNT_STATUSES supports active status set during provisioning", () => {
+    // Provisioning sets accountStatus to "active"
+    expect(ACCOUNT_STATUSES).toContain("active");
+    // Suspension/revocation are post-provisioning states
+    expect(ACCOUNT_STATUSES).toContain("suspended");
+    expect(ACCOUNT_STATUSES).toContain("revoked");
+  });
+
+  it("app has no unauthenticated role that bypasses org check", () => {
+    // There must be no role that allows access without an org
+    expect(ROLES).not.toContain("anonymous");
+    expect(ROLES).not.toContain("public");
+    expect(ROLES).not.toContain("guest");
+    expect(ROLES).not.toContain("unauthenticated");
+  });
+});

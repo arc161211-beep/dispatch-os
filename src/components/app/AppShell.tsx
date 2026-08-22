@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router";
 import { useMutation, useQuery } from "convex/react";
 import { useTheme } from "next-themes";
@@ -17,7 +17,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { CommandPalette } from "./CommandPalette";
 import { Logo } from "@/components/brand/Logo";
@@ -49,7 +48,13 @@ import {
   UserCog,
   Wallet,
   ChevronLeft,
+  RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
+
+// ---------------------------------------------------------------------------
+// Navigation items
+// ---------------------------------------------------------------------------
 
 interface NavItem {
   to: string;
@@ -162,6 +167,10 @@ function useNavItems() {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Nav list
+// ---------------------------------------------------------------------------
+
 function NavList({ items, onNavigate, collapsed }: { items: NavItem[]; onNavigate?: () => void; collapsed?: boolean }) {
   return (
     <nav className="space-y-0.5">
@@ -190,38 +199,166 @@ function NavList({ items, onNavigate, collapsed }: { items: NavItem[]; onNavigat
   );
 }
 
-function SettingUp() {
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-background">
-      <div className="flex flex-col items-center gap-3 text-sm text-muted-foreground">
-        <Spinner className="size-5" />
-        Setting up your workspace…
-      </div>
-    </main>
-  );
+// ---------------------------------------------------------------------------
+// AppInit — auth + provisioning phase
+//
+// This component handles:
+// 1. Auth loading (waiting for Convex session)
+// 2. Workspace provisioning (first login / returning user)
+// 3. Provisioning error with retry
+//
+// It does NOT render any children that contain useQuery calls requiring
+// organization context. This prevents the race condition where protected
+// queries fire before the user has an orgId.
+// ---------------------------------------------------------------------------
+
+function AppInit({ children }: { children: ReactNode }) {
+  const { isLoading: isAuthLoading, user } = useAuth();
+  const provision = useMutation(api.users.provision);
+  const [provisioning, setProvisioning] = useState(false);
+  const [provisionError, setProvisionError] = useState<string | null>(null);
+  const triedRef = useRef(0);
+
+  useEffect(() => {
+    if (isAuthLoading || !user) return;
+
+    // Already provisioned
+    if (user.orgId) {
+      triedRef.current = 0;
+      setProvisionError(null);
+      return;
+    }
+
+    // User is authenticated but has no org yet — provision
+    if (triedRef.current >= 3) return; // already failed 3 times, let user retry manually
+
+    setProvisioning(true);
+    setProvisionError(null);
+    triedRef.current += 1;
+
+    provision()
+      .then(() => {
+        // Provisioning succeeded — user.orgId will update reactively
+      })
+      .catch((e: unknown) => {
+        const msg =
+          e instanceof Error
+            ? e.message
+            : typeof e === "object" && e !== null && "message" in e
+              ? String((e as { message: unknown }).message)
+              : "Workspace setup failed. Please try again.";
+        setProvisionError(msg);
+      })
+      .finally(() => setProvisioning(false));
+  }, [isAuthLoading, user, provision]);
+
+  // --- State: loading auth / loading user ---
+  if (isAuthLoading || !user) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center bg-background">
+        <div className="relative mb-4">
+          <div className="size-8 rounded-full border-2 border-[#4F8CFF]/20 border-t-[#4F8CFF] animate-spin" />
+        </div>
+        <p className="text-xs font-medium text-muted-foreground animate-pulse">Signing in…</p>
+      </main>
+    );
+  }
+
+  // --- State: provisioning (or retrying after error) ---
+  if (provisioning && !user.orgId) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="relative">
+            <div className="size-8 rounded-full border-2 border-[#4F8CFF]/20 border-t-[#4F8CFF] animate-spin" />
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-foreground">Setting up your DispatchOS workspace</p>
+            <p className="text-xs text-muted-foreground">This only takes a moment…</p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // --- State: provisioning failed ---
+  if (provisionError && !user.orgId) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center bg-background p-6">
+        <div className="flex max-w-sm flex-col items-center gap-4 text-center">
+          <div className="flex size-10 items-center justify-center rounded-xl bg-destructive/10">
+            <AlertTriangle className="size-5 text-destructive" />
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-foreground">Workspace setup failed</p>
+            <p className="text-xs text-muted-foreground">
+              {provisionError.includes("private platform") || provisionError.includes("invited")
+                ? "This is a private platform. You must be invited by an administrator."
+                : "Something went wrong while setting up your workspace."}
+            </p>
+          </div>
+          {!provisionError.includes("private platform") && !provisionError.includes("invited") && (
+            <Button
+              onClick={() => {
+                setProvisionError(null);
+                triedRef.current = 0;
+                // Trigger re-provision via state change
+                setProvisioning(true);
+              }}
+              className="gap-2"
+            >
+              <RefreshCw className="size-3.5" />
+              Try Again
+            </Button>
+          )}
+        </div>
+      </main>
+    );
+  }
+
+  // --- State: user exists but no org (exhausted retries, no error) ---
+  if (!user.orgId) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center bg-background p-6">
+        <div className="flex max-w-sm flex-col items-center gap-4 text-center">
+          <div className="flex size-10 items-center justify-center rounded-xl bg-[#F5A623]/10">
+            <AlertTriangle className="size-5 text-[#F5A623]" />
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-foreground">Workspace not found</p>
+            <p className="text-xs text-muted-foreground">
+              This is a private platform. Please contact your administrator for an invitation.
+            </p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // --- State: ready — user has orgId, render the app ---
+  return <>{children}</>;
 }
 
-export function AppShell() {
-  const { isLoading, user, signOut } = useAuth();
-  const provision = useMutation(api.users.provision);
+// ---------------------------------------------------------------------------
+// ShellContent — the actual app shell with sidebar, header, queries
+//
+// This component is ONLY rendered when the user has a valid orgId.
+// All useQuery calls inside here are safe because:
+// 1. useAuth().user.orgId exists (AppInit ensures this)
+// 2. requireOrg() will succeed
+// 3. No protected query fires before provisioning
+// ---------------------------------------------------------------------------
+
+function ShellContent() {
+  const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const role = useRole();
   const unread = useQuery(api.notifications.unreadCount);
   const settings = useQuery(api.settings.get);
   const { theme, setTheme } = useTheme();
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [provisioning, setProvisioning] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-
-  useEffect(() => {
-    if (user && !user.orgId && !provisioning) {
-      setProvisioning(true);
-      provision()
-        .catch((e) => console.error("Provision failed:", e))
-        .finally(() => setProvisioning(false));
-    }
-  }, [user, provision, provisioning]);
 
   const { groups, canWrite } = useNavItems();
 
@@ -235,8 +372,6 @@ export function AppShell() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-
-  if (isLoading || (user && !user.orgId) || provisioning) return <SettingUp />;
 
   const handleSignOut = async () => {
     await signOut();
@@ -416,5 +551,22 @@ export function AppShell() {
         </main>
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// AppShell — exported entry point
+//
+// Wraps ShellContent in AppInit to ensure:
+// 1. Auth is fully loaded
+// 2. Provisioning has completed (user.orgId exists)
+// 3. No protected query fires before the workspace is ready
+// ---------------------------------------------------------------------------
+
+export function AppShell() {
+  return (
+    <AppInit>
+      <ShellContent />
+    </AppInit>
   );
 }
