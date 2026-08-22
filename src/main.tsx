@@ -145,7 +145,7 @@ const Protected = ({ children }: { children: React.ReactNode }) => {
     const returnTo = `${location.pathname}${location.search}`;
     return <Navigate to={`/auth?returnTo=${encodeURIComponent(returnTo)}`} replace />;
   }
-  return <AppShell />;
+  return <AppShell>{children}</AppShell>;
 };
 
 createRoot(document.getElementById("root")!).render(

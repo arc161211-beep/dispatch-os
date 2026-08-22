@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router";
+import { NavLink, useNavigate } from "react-router";
 import { useMutation, useQuery } from "convex/react";
 import { useTheme } from "next-themes";
 import { api } from "@/convex/_generated/api";
@@ -213,6 +213,7 @@ function NavList({ items, onNavigate, collapsed }: { items: NavItem[]; onNavigat
 // ---------------------------------------------------------------------------
 
 function AppInit({ children }: { children: ReactNode }) {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const { isLoading: isAuthLoading, user } = useAuth();
   const provision = useMutation(api.users.provision);
   const [provisioning, setProvisioning] = useState(false);
@@ -349,7 +350,7 @@ function AppInit({ children }: { children: ReactNode }) {
 // 3. No protected query fires before provisioning
 // ---------------------------------------------------------------------------
 
-function ShellContent() {
+function ShellContent({ children }: { children: ReactNode }) {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const role = useRole();
@@ -547,7 +548,7 @@ function ShellContent() {
         )}
 
         <main className="mx-auto w-full max-w-7xl flex-1 p-4 sm:p-5 lg:p-6">
-          <Outlet />
+          {children}
         </main>
       </div>
     </div>
@@ -563,10 +564,10 @@ function ShellContent() {
 // 3. No protected query fires before the workspace is ready
 // ---------------------------------------------------------------------------
 
-export function AppShell() {
+export function AppShell({ children }: { children: ReactNode }) {
   return (
     <AppInit>
-      <ShellContent />
+      <ShellContent>{children}</ShellContent>
     </AppInit>
   );
 }
