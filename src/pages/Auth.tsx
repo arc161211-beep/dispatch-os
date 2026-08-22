@@ -7,6 +7,7 @@ import { ArrowLeft, ArrowRight, Loader2, Mail, ShieldCheck, Lock } from "lucide-
 import { motion } from "framer-motion";
 import { Suspense, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
+import type { Role } from "@/convex/constants";
 
 interface AuthProps {
   redirectAfterAuth?: string;
@@ -17,6 +18,15 @@ function resolveRedirectAfterAuth(returnTo: string | null, fallback = "/dashboar
     return returnTo;
   }
   return fallback;
+}
+
+/** Role-based redirect: each role goes to its own portal */
+function getRoleRedirect(role?: Role, returnTo?: string | null): string {
+  if (returnTo?.startsWith("/") && !returnTo.startsWith("//")) return returnTo;
+  if (role === "carrier_admin") return "/portal/carrier";
+  if (role === "driver") return "/portal/driver";
+  // All other roles go to dashboard
+  return "/dashboard";
 }
 
 /** Subtle animated route lines in the background */
@@ -120,10 +130,10 @@ function AuthTruckVisual() {
 }
 
 function Auth({ redirectAfterAuth }: AuthProps = {}) {
-  const { isLoading: authLoading, isAuthenticated, signIn } = useAuth();
+  const { isLoading: authLoading, isAuthenticated, user, signIn } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const redirect = resolveRedirectAfterAuth(searchParams.get("returnTo"), redirectAfterAuth);
+  const returnTo = searchParams.get("returnTo");
   const [step, setStep] = useState<"signIn" | { email: string }>("signIn");
   const [otp, setOtp] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -131,9 +141,11 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
-      navigate(redirect);
+      // Role-based redirect
+      const dest = getRoleRedirect(user?.role as Role | undefined, returnTo);
+      navigate(dest, { replace: true });
     }
-  }, [authLoading, isAuthenticated, navigate, redirect]);
+  }, [authLoading, isAuthenticated, user, navigate, returnTo]);
 
   const handleEmailSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -144,8 +156,8 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       await signIn("email-otp", formData);
       setStep({ email: formData.get("email") as string });
       setIsLoading(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to send verification code. Please try again.");
+    } catch {
+      setError("Unable to send your verification code. Please try again or contact your administrator.");
       setIsLoading(false);
     }
   };
@@ -157,16 +169,16 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     try {
       const formData = new FormData(event.currentTarget);
       await signIn("email-otp", formData);
-      navigate(redirect);
+      // Redirect handled by useEffect above (role-based)
     } catch {
-      setError("The verification code you entered is incorrect.");
+      setError("The verification code you entered is incorrect. Please try again.");
       setIsLoading(false);
       setOtp("");
     }
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-[#0B0D0F] overflow-hidden">
+    <div className="relative flex min-h-screen items-center justify-center bg-[#080B0F] overflow-hidden">
       <BackgroundRoutes />
 
       <div className="relative z-10 grid w-full max-w-4xl gap-8 px-4 py-10 lg:grid-cols-2 lg:gap-14">
@@ -207,7 +219,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, ease: "easeOut" as const }}
-            className="w-full rounded-2xl border border-white/[0.06] bg-[#11161F]/90 p-6 shadow-2xl shadow-black/40 backdrop-blur-xl"
+            className="w-full rounded-2xl border border-white/[0.06] bg-[#111821]/90 p-6 shadow-2xl shadow-black/40 backdrop-blur-xl"
           >
             {/* Mobile logo */}
             <div className="mb-6 flex items-center gap-2 lg:hidden">

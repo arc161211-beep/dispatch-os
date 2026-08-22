@@ -37,7 +37,10 @@ export const emailOtp = Email({
         },
       );
     } catch (error) {
-      throw new Error(JSON.stringify(error));
+      // SECURITY: Never expose raw error details to the client.
+      // Log the full error server-side for debugging.
+      console.error("[emailOtp] Failed to send verification code:", error);
+      throw new Error("Unable to send your verification code. Please try again or contact your administrator.");
     }
   },
 });
