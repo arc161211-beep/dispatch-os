@@ -148,7 +148,7 @@ export default function Dashboard() {
           transition={{ delay: 0.05 }}
           className="hidden rounded-2xl border border-border/50 bg-card p-4 lg:flex lg:col-span-2 flex-col items-center justify-center"
         >
-          <TruckHero width={300} height={160} status={summary.ops.activeLoads > 0 ? "moving" : "idle"} />
+          <TruckHero width={500} height={280} status={summary.ops.activeLoads > 0 ? "moving" : "idle"} showMarkers />
           <p className="mt-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">
             {summary.ops.activeLoads > 0 ? "Fleet in motion" : "Fleet standing by"}
           </p>

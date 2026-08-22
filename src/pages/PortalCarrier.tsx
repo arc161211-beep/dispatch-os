@@ -88,7 +88,7 @@ export default function PortalCarrier() {
             </div>
           </div>
           <div className="hidden w-[300px] shrink-0 items-center justify-center lg:flex">
-            <TruckHero width={280} height={160} status={activeLoads.length > 0 ? "moving" : "idle"} />
+            <TruckHero width={480} height={260} status={activeLoads.length > 0 ? "moving" : "idle"} showMarkers />
           </div>
         </div>
       </div>

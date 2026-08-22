@@ -126,8 +126,8 @@ export default function Landing() {
 
             {/* Right: animated truck */}
             <motion.div {...fadeUp} className="flex justify-center lg:justify-end">
-              <div className="relative">
-                <TruckHero width={480} height={260} status="moving" showMarkers />
+              <div className="relative w-full max-w-lg">
+                <TruckHero width={700} height={380} status="moving" showMarkers />
                 {/* Floating badges */}
                 <motion.div
                   initial={{ opacity: 0, x: -10 }}
