@@ -3,9 +3,9 @@ import { MapPin } from "lucide-react";
 import { fmtDateTime } from "@/lib/dates";
 import type { ReactNode } from "react";
 
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------  
 // Leaflet lazy-load wrapper — only imports in browser, keeps bundle small
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------  
 
 let L: typeof import("leaflet") | null = null;
 
@@ -17,9 +17,9 @@ async function loadLeaflet() {
   return L;
 }
 
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------  
 // XSS-safe HTML escaping — never inject raw database values into popups
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------  
 
 function escapeHtml(str: string): string {
   return str
@@ -30,9 +30,9 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#039;");
 }
 
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------  
 // Types
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------  
 
 export interface TruckMarker {
   truckId: string;
@@ -58,9 +58,9 @@ export interface TruckMapProps {
   onTruckClick?: (truck: TruckMarker) => void;
 }
 
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------  
 // Component
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------  
 
 export function TruckMap({ trucks, height = "h-80", className, emptyState, onTruckClick }: TruckMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -142,10 +142,10 @@ export function TruckMap({ trucks, height = "h-80", className, emptyState, onTru
             </div>
             <div style="font-size:11px;color:#9ca3af;display:flex;align-items:center;gap:4px">
               <span>${isLive ? "🟢" : "🟡"}</span> ${escapeHtml(timeLabel)}${escapeHtml(sourceLabel)}
-              ${truck.accuracy ? ` · \u00B1${Math.round(truck.accuracy)}m` : ""}
+              ${truck.accuracy ? ` · \\u00B1${Math.round(truck.accuracy)}m` : ""}
             </div>
             <div style="margin-top:8px">
-              <a href="/trucks/${encodeURIComponent(truck.truckId)}" style="font-size:12px;color:#2563eb;text-decoration:underline">View truck details \u2192</a>
+              <a href="/trucks/${encodeURIComponent(truck.truckId)}" style="font-size:12px;color:#2563eb;text-decoration:underline">View truck details \\u2192</a>
             </div>
           </div>
         `);
@@ -183,17 +183,17 @@ export function TruckMap({ trucks, height = "h-80", className, emptyState, onTru
   // Empty state
   if (validTrucks.length === 0) {
     return (
-      <div className={`relative rounded-lg border bg-muted/30 overflow-hidden ${height} ${className ?? ""}`}>
+      <div className={`relative rounded-lg border border-border/50 bg-muted/20 overflow-hidden ${height} ${className ?? ""}`}>
         {emptyState ?? (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4">
             <MapPin className="size-6 text-muted-foreground" />
             <p className="mt-2 text-sm text-muted-foreground">No truck locations available</p>
-            <p className="text-xs text-muted-foreground mt-1">Truck positions appear when drivers share GPS data</p>
+            <p className="text-xs text-muted-foreground/70 mt-1">Truck positions appear when drivers share GPS data</p>
           </div>
         )}
       </div>
     );
   }
 
-  return <div ref={containerRef} className={`relative rounded-lg border overflow-hidden ${height} ${className ?? ""}`} />;
+  return <div ref={containerRef} className={`relative rounded-lg border border-border/50 overflow-hidden ${height} ${className ?? ""}`} />;
 }

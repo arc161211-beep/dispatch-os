@@ -1,17 +1,15 @@
-import { useMemo } from "react";
 import { useQuery } from "convex/react";
 import { useParams, useNavigate } from "react-router";
+import { motion } from "framer-motion";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { useTimezone } from "@/hooks/use-app";
+import { useTimezone, useCanWrite } from "@/hooks/use-app";
 import { fmtDate, fmtTime, fmtDateTime } from "@/lib/dates";
-import { statusClass } from "@/lib/status";
 import { PageHeader, StatCard, StatusBadge, KV, LoadingState, EmptyState, SectionCard } from "@/components/app/shared";
-import { useCanWrite } from "@/hooks/use-app";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { ArrowLeft, MapPin, Clock, Truck as TruckIcon, UserRound, Package, History } from "lucide-react";
+import { ArrowLeft, MapPin, Clock, Truck as TruckIcon, UserRound, Package } from "lucide-react";
+
+const fadeUp = { initial: { opacity: 0, y: 12 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.35 } };
 
 export default function TruckDetail() {
   const { id } = useParams<{ id: string }>();
@@ -40,27 +38,53 @@ export default function TruckDetail() {
   const isLive = locationAge < 15 * 60 * 1000;
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={`Truck ${truck.unitNumber}`}
-        description={carrierName ? `Carrier: ${carrierName}` : undefined}
-        actions={
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => navigate("/trucks")}>
-              <ArrowLeft className="mr-1 h-4 w-4" /> Back
-            </Button>
-          </div>
-        }
-      />
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Status" value={truck.availability} icon={<TruckIcon className="h-4 w-4" />} tone={truck.availability === "Available" ? "good" : truck.availability === "In Transit" ? "accent" : "default"} />
-        <StatCard label="Type" value={truck.type ?? "Not specified"} />
-        <StatCard label="Location" value={latestLocation?.location ?? truck.currentLocation ?? "Unknown"} icon={<MapPin className="h-4 w-4" />} />
-        <StatCard label="Location Status" value={latestLocation ? (isLive ? "Live" : `Last known — ${fmtTime(latestLocation.at, tz)}`) : "Location unavailable"} icon={<Clock className="h-4 w-4" />} tone={isLive ? "good" : "warn"} />
+    <div className="space-y-6 pb-8">
+      {/* Back nav */}
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="icon" onClick={() => navigate("/trucks")} className="size-8">
+          <ArrowLeft className="size-4" />
+        </Button>
+        <span className="text-xs text-muted-foreground">Trucks</span>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      {/* Hero */}
+      <motion.div {...fadeUp} className="relative overflow-hidden rounded-2xl border border-border/50 bg-gradient-to-br from-card via-card to-card/80">
+        <div className="relative z-10 p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#4F8CFF]">Truck</span>
+                <StatusBadge status={truck.availability} />
+              </div>
+              <h1 className="mt-2 text-2xl font-bold tracking-tight">
+                Unit {truck.unitNumber}
+              </h1>
+              <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                {carrierName && <span className="rounded-full bg-[#4F8CFF]/10 px-2 py-0.5 text-[#4F8CFF] font-medium">{carrierName}</span>}
+                {truck.type && <span className="rounded-full bg-muted px-2 py-0.5">{truck.type}</span>}
+                {truck.year && truck.make && <span className="rounded-full bg-muted px-2 py-0.5">{truck.year} {truck.make} {truck.model ?? ""}</span>}
+              </div>
+            </div>
+            <div className="text-right shrink-0">
+              <div className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ${isLive ? "bg-[#22C55E]/10 text-[#22C55E]" : "bg-[#F5A623]/10 text-[#F5A623]"}`}>
+                <span className={`size-1.5 rounded-full ${isLive ? "bg-[#22C55E] animate-pulse" : "bg-[#F5A623]"}`} />
+                {isLive ? "Live" : "Stale"}
+              </div>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Stats */}
+      <motion.div {...fadeUp} transition={{ delay: 0.08 }} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Status" value={truck.availability} icon={<TruckIcon className="size-4" />} tone={truck.availability === "Available" ? "good" : truck.availability === "In Transit" ? "accent" : "default"} />
+        <StatCard label="Type" value={truck.type ?? "Not specified"} />
+        <StatCard label="Location" value={latestLocation?.location ?? truck.currentLocation ?? "Unknown"} icon={<MapPin className="size-4" />} />
+        <StatCard label="Location Status" value={latestLocation ? (isLive ? "Live" : `Last known — ${fmtTime(latestLocation.at, tz)}`) : "Location unavailable"} icon={<Clock className="size-4" />} tone={isLive ? "good" : "warn"} />
+      </motion.div>
+
+      {/* Details */}
+      <motion.div {...fadeUp} transition={{ delay: 0.12 }} className="grid gap-6 lg:grid-cols-2">
         <SectionCard title="Truck Details">
           <div className="space-y-0.5">
             <KV label="Unit Number">{truck.unitNumber}</KV>
@@ -79,31 +103,21 @@ export default function TruckDetail() {
         <SectionCard title="Location History">
           {locationHistory && locationHistory.length > 0 ? (
             <div className="space-y-3">
-              {locationHistory.map((loc) => (
-                <div key={loc._id} className="flex items-start gap-3 rounded-lg border p-3">
-                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">{loc.location ?? `${loc.lat.toFixed(4)}, ${loc.lon.toFixed(4)}`}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {fmtDateTime(loc.at, tz)}
-                      {loc.source ? ` · ${loc.source}` : ""}
-                      {loc.accuracy ? ` · ±${loc.accuracy}m` : ""}
-                    </p>
+              {locationHistory.map((h) => (
+                <div key={h._id} className="flex items-start gap-3">
+                  <div className="mt-1 size-2 shrink-0 rounded-full bg-[#4F8CFF]" />
+                  <div>
+                    <p className="text-sm">{h.location ?? `${h.lat.toFixed(4)}, ${h.lon.toFixed(4)}`}</p>
+                    <p className="text-xs text-muted-foreground">{fmtDateTime(h.at, tz)} · {h.source ?? "unknown"}</p>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No location history recorded.</p>
+            <EmptyState icon={<MapPin className="size-5" />} title="No location history" description="Location data will appear when GPS is shared." />
           )}
         </SectionCard>
-      </div>
-
-      {truck.notes && (
-        <SectionCard title="Notes">
-          <p className="text-sm whitespace-pre-wrap">{truck.notes}</p>
-        </SectionCard>
-      )}
+      </motion.div>
     </div>
   );
 }

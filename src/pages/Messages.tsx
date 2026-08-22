@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
+import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/convex/_generated/api";
 import { useCanWrite } from "@/hooks/use-app";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,8 @@ import { cn } from "@/lib/utils";
 
 type Conversation = any;
 type Message = any;
+
+const fadeUp = { initial: { opacity: 0, y: 12 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.35 } };
 
 export default function Messages() {
   const canWrite = useCanWrite();
@@ -28,7 +31,6 @@ export default function Messages() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [priorityFilter, setPriorityFilter] = useState<"" | "urgent" | "high" | "normal">("");
 
-  // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
     return () => clearTimeout(timer);
@@ -56,39 +58,45 @@ export default function Messages() {
   if (selectedConvo && messages) {
     return (
       <div className="space-y-4">
-        <div className="flex items-center gap-3">
+        <motion.div {...fadeUp} className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => setSelectedId(null)}><ArrowLeft className="size-4" /></Button>
           <div>
-            <h1 className="text-lg font-semibold">{selectedConvo.title}</h1>
+            <h1 className="text-lg font-semibold tracking-tight">{selectedConvo.title}</h1>
             <p className="text-xs text-muted-foreground">{selectedConvo.entityType} · {selectedConvo.messageCount} messages</p>
           </div>
-        </div>
-        <div className="space-y-3 max-h-[60vh] overflow-y-auto rounded-lg border p-4">
-          {messages.messages.map((m) => (
-            <div key={m._id} className={cn("flex", m.direction === "out" ? "justify-end" : "justify-start")}>
-              <div className={cn("max-w-[75%] rounded-lg px-4 py-3", m.direction === "out" ? "bg-primary text-primary-foreground" : "bg-muted")}>
+        </motion.div>
+        <motion.div {...fadeUp} transition={{ delay: 0.05 }} className="space-y-3 max-h-[60vh] overflow-y-auto rounded-xl border border-border/50 bg-card p-4">
+          {messages.messages.map((m: any) => (
+            <motion.div
+              key={m._id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2 }}
+              className={cn("flex", m.direction === "out" ? "justify-end" : "justify-start")}
+            >
+              <div className={cn("max-w-[75%] rounded-xl px-4 py-3", m.direction === "out" ? "bg-primary text-primary-foreground" : "bg-muted/60")}>
                 {m.subject && <p className="text-xs font-semibold mb-1 opacity-80">{m.subject}</p>}
                 <p className="text-sm whitespace-pre-wrap">{m.body}</p>
                 <div className="flex items-center gap-2 mt-2">
-                  <span className="text-[10px] opacity-70">{m.senderName ?? (m.direction === "out" ? "You" : "Incoming")} · {fmtRelative(m._creationTime)}</span>
+                  <span className="text-[10px] opacity-60">{m.senderName ?? (m.direction === "out" ? "You" : "Incoming")} · {fmtRelative(m._creationTime)}</span>
                   {m.priority === "urgent" && <AlertTriangle className="size-3 text-red-400" />}
-                  {m.aiCategory && <Badge variant="outline" className="text-[10px] opacity-70">{m.aiCategory}</Badge>}
+                  {m.aiCategory && <Badge variant="outline" className="text-[10px] opacity-60 border-white/10">{m.aiCategory}</Badge>}
                 </div>
               </div>
-            </div>
+            </motion.div>
           ))}
           {messages.messages.length === 0 && <p className="text-sm text-muted-foreground text-center py-8">No messages yet.</p>}
-        </div>
+        </motion.div>
         {canWrite && (
-          <div className="flex gap-2">
+          <motion.div {...fadeUp} transition={{ delay: 0.1 }} className="flex gap-2">
             <SelectInput value={replyChannel} onChange={(e) => setReplyChannel(e.target.value)} className="w-32">
               <option value="internal">Internal</option>
               <option value="email">Email</option>
               <option value="sms">SMS</option>
             </SelectInput>
-            <input value={replyBody} onChange={(e) => setReplyBody(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleSend())} placeholder="Type a message…" className="flex-1 h-9 rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30" />
-            <Button size="sm" onClick={handleSend} disabled={!replyBody.trim()} className="gap-1.5"><Send className="size-3.5" /> Send</Button>
-          </div>
+            <input value={replyBody} onChange={(e) => setReplyBody(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleSend())} placeholder="Type a message…" className="flex-1 h-9 rounded-lg border border-border/60 bg-card px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30" />
+            <Button size="sm" onClick={handleSend} disabled={!replyBody.trim()} className="gap-1.5 bg-primary hover:bg-primary/90 shadow-sm shadow-primary/20"><Send className="size-3.5" /> Send</Button>
+          </motion.div>
         )}
       </div>
     );
@@ -114,13 +122,13 @@ export default function Messages() {
               <input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search messages..."
-                className="flex-1 h-9 rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+                placeholder="Search messages…"
+                className="flex-1 h-9 rounded-lg border border-border/60 bg-card px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
               />
               <select
                 value={priorityFilter}
                 onChange={(e) => setPriorityFilter(e.target.value as any)}
-                className="h-9 rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+                className="h-9 rounded-lg border border-border/60 bg-card px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
               >
                 <option value="">All priorities</option>
                 <option value="urgent">🔴 Urgent</option>
@@ -132,12 +140,12 @@ export default function Messages() {
                 <p className="text-sm text-muted-foreground text-center py-8">No conversations match your search.</p>
               ) : (
                 filteredConversations.map((c) => (
-                  <button key={c._id} onClick={() => handleSelect(c._id)} className="flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors hover:bg-muted/40">
+                  <button key={c._id} onClick={() => handleSelect(c._id)} className="flex w-full items-center gap-3 rounded-xl border border-border/50 bg-card px-4 py-3 text-left transition-all duration-150 hover:border-border hover:bg-card/80 hover:shadow-sm">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-medium truncate">{c.title}</p>
-                        {c.unread > 0 && <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-transparent text-[10px]">{c.unread} unread</Badge>}
-                        {c.urgent > 0 && <Badge variant="outline" className="bg-red-500/10 text-red-600 border-transparent text-[10px]">{c.urgent} urgent</Badge>}
+                        {c.unread > 0 && <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px]">{c.unread} unread</Badge>}
+                        {c.urgent > 0 && <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20 text-[10px]">{c.urgent} urgent</Badge>}
                       </div>
                       <p className="text-xs text-muted-foreground truncate mt-0.5">{c.lastMessagePreview || "No messages"}</p>
                     </div>

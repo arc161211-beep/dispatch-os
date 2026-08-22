@@ -44,7 +44,7 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --color-gold: #F5A623;
   --color-electric: #4F8CFF;
-  --color-surface-dark: #11161F;
+  --color-surface-dark: #111821;
 }
 
 /* ============================================================
@@ -53,17 +53,17 @@
 :root {
   --radius: 0.75rem;
   --background: #F5F7FA;
-  --foreground: #0B0D0F;
+  --foreground: #080B0F;
   --card: #FFFFFF;
-  --card-foreground: #0B0D0F;
+  --card-foreground: #080B0F;
   --popover: #FFFFFF;
-  --popover-foreground: #0B0D0F;
+  --popover-foreground: #080B0F;
   --primary: #4F8CFF;
   --primary-foreground: #FFFFFF;
   --secondary: #EDF0F4;
   --secondary-foreground: #2A3142;
   --muted: #EDF0F4;
-  --muted-foreground: #6B7A90;
+  --muted-foreground: #8F9AAA;
   --accent: #F0F4FA;
   --accent-foreground: #2A3142;
   --destructive: #EF4444;
@@ -75,7 +75,7 @@
   --chart-3: #F5A623;
   --chart-4: #EF4444;
   --chart-5: #8B5CF6;
-  --sidebar: #0F1318;
+  --sidebar: #0D1218;
   --sidebar-foreground: #C8D0E0;
   --sidebar-primary: #4F8CFF;
   --sidebar-primary-foreground: #FFFFFF;
@@ -89,19 +89,19 @@
    DISPATCHOS DARK THEME — Premium Cinematic
    ============================================================ */
 .dark {
-  --background: #0B0D0F;
+  --background: #080B0F;
   --foreground: #F0F2F5;
-  --card: #11161F;
+  --card: #111821;
   --card-foreground: #F0F2F5;
-  --popover: #151B26;
+  --popover: #151D27;
   --popover-foreground: #F0F2F5;
   --primary: #4F8CFF;
   --primary-foreground: #FFFFFF;
-  --secondary: #1A2030;
+  --secondary: #0D1218;
   --secondary-foreground: #C8D0E0;
-  --muted: #1A2030;
-  --muted-foreground: #6B7A90;
-  --accent: #1A2030;
+  --muted: #0D1218;
+  --muted-foreground: #8F9AAA;
+  --accent: #0D1218;
   --accent-foreground: #F0F2F5;
   --destructive: #DC2626;
   --border: rgba(255, 255, 255, 0.08);
@@ -112,7 +112,7 @@
   --chart-3: #F5A623;
   --chart-4: #EF4444;
   --chart-5: #8B5CF6;
-  --sidebar: #0B0D0F;
+  --sidebar: #080B0F;
   --sidebar-foreground: #C8D0E0;
   --sidebar-primary: #4F8CFF;
   --sidebar-primary-foreground: #FFFFFF;
@@ -161,7 +161,7 @@
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 .dark .glass-surface {
-  background: rgba(17, 22, 31, 0.7);
+  background: rgba(17, 24, 33, 0.7);
 }
 
 /* Premium gradient border */
@@ -207,6 +207,34 @@
 /* Number display */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+/* Premium button hover glow */
+.btn-primary-glow {
+  box-shadow: 0 0 0 0 rgba(79, 140, 255, 0);
+  transition: box-shadow 0.2s ease, transform 0.15s ease;
+}
+.btn-primary-glow:hover {
+  box-shadow: 0 4px 20px -4px rgba(79, 140, 255, 0.35);
+  transform: translateY(-1px);
+}
+.btn-primary-glow:active {
+  transform: scale(0.98) translateY(0);
+}
+
+/* Sidebar active rail */
+.nav-active-rail {
+  position: relative;
+}
+.nav-active-rail::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: #4F8CFF;
 }
 
 /* Reduced motion */

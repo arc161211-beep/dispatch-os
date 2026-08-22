@@ -173,11 +173,11 @@ function NavList({ items, onNavigate, collapsed }: { items: NavItem[]; onNavigat
           onClick={onNavigate}
           className={({ isActive }) =>
             cn(
-              "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-all duration-150",
+              "relative flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-all duration-150",
               collapsed && "justify-center px-2",
               isActive
-                ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
-                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
+                ? "nav-active-rail bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground/90",
             )
           }
           title={collapsed ? item.label : undefined}
@@ -281,7 +281,7 @@ export function AppShell() {
           {groups.map((g) => (
             <div key={g.title}>
               {!collapsed && (
-                <p className="mb-1.5 px-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-sidebar-foreground/40">
+                <p className="mb-1.5 px-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-sidebar-foreground/30">
                   {g.title}
                 </p>
               )}
@@ -295,7 +295,7 @@ export function AppShell() {
           <button
             type="button"
             onClick={() => setCollapsed(!collapsed)}
-            className="flex w-full items-center justify-center rounded-lg p-1.5 text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+            className="flex w-full items-center justify-center rounded-lg p-1.5 text-sidebar-foreground/40 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground/70"
           >
             <ChevronLeft className={cn("size-4 transition-transform duration-200", collapsed && "rotate-180")} />
           </button>
@@ -332,7 +332,7 @@ export function AppShell() {
               <div className="space-y-4 overflow-y-auto p-3">
                 {groups.map((g) => (
                   <div key={g.title}>
-                    <p className="mb-1.5 px-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-sidebar-foreground/40">
+                    <p className="mb-1.5 px-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-sidebar-foreground/30">
                       {g.title}
                     </p>
                     <NavList items={g.items} onNavigate={() => setMobileNavOpen(false)} />
