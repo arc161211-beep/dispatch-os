@@ -8,9 +8,12 @@ import {
   BarChart3,
   Building2,
   CheckCircle2,
+  ChevronDown,
   FileText,
   MessageSquare,
+  Mouse,
   Package,
+  Play,
   Route,
   ShieldCheck,
   Sparkles,
@@ -43,21 +46,23 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-[#080B0F] text-white">
       {/* ═══════════════ NAV ═══════════════ */}
-      <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-[#080B0F]/80 backdrop-blur-xl">
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Logo size="sm" variant="full" className="[&_span]:!text-white [&_span]:font-bold" />
-          <nav className="hidden items-center gap-6 text-sm text-white/40 md:flex">
-            <a href="#operation" className="transition-colors hover:text-white/70">Platform</a>
-            <a href="#fleet" className="transition-colors hover:text-white/70">Fleet</a>
-            <a href="#load-flow" className="transition-colors hover:text-white/70">Workflow</a>
-            <a href="#security" className="transition-colors hover:text-white/70">Security</a>
+      <header className="absolute top-0 left-0 right-0 z-50">
+        <div className="mx-auto flex h-16 max-w-[1400px] items-center justify-between px-6 lg:px-10">
+          <Logo size="sm" variant="full" className="[&_span]:!text-white [&_span]:!font-bold" />
+          <nav className="hidden items-center gap-8 text-sm font-medium text-white/50 lg:flex">
+            <a href="#operation" className="transition-colors hover:text-white">Platform</a>
+            <a href="#features" className="transition-colors hover:text-white">Features</a>
+            <a href="#load-flow" className="transition-colors hover:text-white">How It Works</a>
+            <a href="#security" className="transition-colors hover:text-white">Security</a>
           </nav>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <Link to="/auth">
-              <Button variant="ghost" size="sm" className="text-white/60 hover:text-white hover:bg-white/[0.06]">Sign in</Button>
+              <Button variant="outline" size="sm" className="border-white/20 text-white/70 hover:bg-white/10 hover:text-white">
+                Login
+              </Button>
             </Link>
             <Link to="/auth?returnTo=%2Fdashboard">
-              <Button size="sm" className="gap-1.5 bg-electric hover:bg-electric/90 text-white shadow-lg shadow-electric/20">
+              <Button size="sm" className="gap-1.5 bg-electric hover:bg-electric/90 text-white shadow-lg shadow-electric/30 font-semibold">
                 Launch DispatchOS <ArrowRight className="size-3.5" />
               </Button>
             </Link>
@@ -65,125 +70,178 @@ export default function Landing() {
         </div>
       </header>
 
-      {/* ═══════════════ 01 HERO ═══════════════ */}
-      <section className="relative overflow-hidden">
-        {/* Background grid */}
-        <div className="pointer-events-none absolute inset-0 opacity-[0.02]"
-          style={{
-            backgroundImage: "linear-gradient(to right, rgba(255,255,255,1) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,1) 1px, transparent 1px)",
-            backgroundSize: "60px 60px",
-          }}
-        />
-        <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(ellipse 60% 50% at 50% 0%, rgba(79,140,255,0.06) 0%, transparent 70%)" }} />
+      {/* ═══════════════ 01 HERO — FULL-BLEED CINEMATIC ═══════════════ */}
+      <section className="relative h-screen min-h-[700px] max-h-[1000px] overflow-hidden">
+        {/* Full-bleed truck image as background */}
+        <div className="absolute inset-0">
+          <img
+            src={heroTruckImg}
+            alt=""
+            className="h-full w-full object-cover object-center"
+            style={{ filter: "brightness(0.7)" }}
+          />
+          {/* Dark gradient overlays for text readability */}
+          <div className="absolute inset-0 bg-gradient-to-r from-[#080B0F] via-[#080B0F]/70 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#080B0F] via-transparent to-[#080B0F]/30" />
+          {/* Subtle blue ambient at top */}
+          <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 40% 30% at 20% 20%, rgba(79,140,255,0.08) 0%, transparent 70%)" }} />
+        </div>
 
-        <div className="relative mx-auto max-w-6xl px-4 pb-20 pt-24 sm:px-6 sm:pt-32">
-          <div className="grid items-center gap-10 lg:grid-cols-2">
-            {/* Left: text */}
-            <div>
-              <motion.div {...fadeUp}>
-                <span className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1 text-xs font-medium text-white/50">
-                  <span className="size-1.5 rounded-full bg-[#22C55E]" />
-                  Private dispatch operations platform
-                </span>
-              </motion.div>
+        {/* Content overlay */}
+        <div className="relative z-10 mx-auto flex h-full max-w-[1400px] items-center px-6 lg:px-10">
+          <div className="w-full max-w-2xl pt-20">
+            {/* LIVE OPERATIONS badge */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3, duration: 0.5 }}
+            >
+              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-white/60 backdrop-blur-sm">
+                <span className="size-2 rounded-full bg-[#22C55E] shadow-[0_0_8px_rgba(34,197,94,0.5)]" />
+                Live Operations
+              </span>
+            </motion.div>
 
-              <motion.h1
-                {...fadeUp}
-                className="mt-7 text-3xl font-extrabold leading-[1.08] tracking-tight sm:text-5xl lg:text-5xl"
-              >
-                Your dispatch operation,
-                <br />
-                <span className="text-electric">in one place.</span>
-              </motion.h1>
+            {/* Headline */}
+            <motion.h1
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5, duration: 0.6 }}
+              className="mt-8 text-5xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl"
+            >
+              Your dispatch
+              <br />
+              operation,
+              <br />
+              <span className="text-electric">in one place.</span>
+            </motion.h1>
 
-              <motion.p
-                {...fadeUp}
-                className="mt-5 max-w-lg text-base leading-7 text-white/40"
-              >
-                Manage carriers, trucks, drivers, loads, documents, communication and
-                dispatch operations from one secure command center.
-              </motion.p>
+            {/* Supporting text */}
+            <motion.p
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.7, duration: 0.5 }}
+              className="mt-6 max-w-lg text-base leading-7 text-white/50 sm:text-lg"
+            >
+              Manage carriers, trucks, drivers, loads, documents
+              <br className="hidden sm:block" />
+              and dispatch operations from one secure
+              <br className="hidden sm:block" />
+              command center.
+            </motion.p>
 
-              <motion.div {...fadeUp} className="mt-8 flex flex-wrap items-center gap-3">
-                <Link to="/auth?returnTo=%2Fdashboard">
-                  <Button size="lg" className="gap-2 bg-electric hover:bg-electric/90 text-white shadow-lg shadow-electric/20">
-                    Launch DispatchOS <ArrowRight className="size-4" />
-                  </Button>
-                </Link>
-                <a href="#operation">
-                  <Button size="lg" variant="outline" className="border-white/[0.08] text-white/50 hover:bg-white/[0.04] hover:text-white">
-                    See how it works
-                  </Button>
-                </a>
-              </motion.div>
-
-              <motion.div {...fadeUp} className="mt-8 flex items-center gap-5 text-xs text-white/30">
-                <span className="flex items-center gap-1.5"><ShieldCheck className="size-3.5 text-[#22C55E]/60" /> Multi-tenant security</span>
-                <span className="flex items-center gap-1.5"><CheckCircle2 className="size-3.5 text-[#22C55E]/60" /> Real records</span>
-                <span className="flex items-center gap-1.5"><Sparkles className="size-3.5 text-electric/60" /> AI assists</span>
-              </motion.div>
-            </div>
-
-            {/* Right: large realistic truck hero */}
-            <motion.div {...fadeUp} className="flex justify-end">
-              <div className="relative w-full">
-                {/* Cinematic road environment with raster truck */}
-                <div className="relative">
-                  <img
-                    src={heroTruckImg}
-                    alt="DispatchOS — premium semi-truck on dark highway"
-                    className="w-full h-auto rounded-2xl object-cover"
-                    style={{ maxHeight: 520, filter: "drop-shadow(0 30px 60px rgba(0,0,0,0.5))" }}
-                    loading="eager"
-                  />
-                  {/* Route overlay line */}
-                  <div className="absolute bottom-[18%] left-[8%] right-[8%] h-px" style={{ background: "linear-gradient(90deg, #4F8CFF, transparent 20%, transparent 80%, #F5A623)" }} />
-                </div>
-                {/* Floating badges */}
-                <motion.div
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 1.5, duration: 0.5 }}
-                  className="absolute -left-2 top-6 rounded-lg border border-electric/20 bg-[#111821]/90 px-3 py-1.5 backdrop-blur-sm"
-                >
-                  <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-electric">
-                    <span className="size-1.5 rounded-full bg-[#22C55E] animate-pulse" />
-                    In Transit
-                  </div>
-                </motion.div>
-                <motion.div
-                  initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 2, duration: 0.5 }}
-                  className="absolute -right-2 bottom-16 rounded-lg border border-[#F5A623]/20 bg-[#111821]/90 px-3 py-1.5 backdrop-blur-sm"
-                >
-                  <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-[#F5A623]">
-                    Load #1042
-                  </div>
-                </motion.div>
-              </div>
+            {/* CTA buttons */}
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.9, duration: 0.5 }}
+              className="mt-8 flex flex-wrap items-center gap-4"
+            >
+              <Link to="/auth?returnTo=%2Fdashboard">
+                <Button size="lg" className="gap-2 bg-electric hover:bg-electric/90 text-white shadow-xl shadow-electric/30 font-semibold text-base px-7">
+                  Launch DispatchOS <ArrowRight className="size-4" />
+                </Button>
+              </Link>
+              <a href="#operation">
+                <Button size="lg" variant="outline" className="gap-2 border-white/20 text-white/60 hover:bg-white/5 hover:text-white font-medium">
+                  <Play className="size-3.5" /> See How It Works
+                </Button>
+              </a>
             </motion.div>
           </div>
         </div>
+
+        {/* ─── FLOATING ROUTE CARD — top right ─── */}
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 1.5, duration: 0.6 }}
+          className="absolute right-6 top-28 z-20 hidden rounded-xl border border-white/10 bg-[#111821]/80 p-4 backdrop-blur-md sm:block lg:right-10"
+        >
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-white/60">Load #1042</span>
+            <span className="flex items-center gap-1 text-[10px] font-semibold text-[#22C55E]">
+              <span className="size-1.5 rounded-full bg-[#22C55E]" />
+              In Transit
+            </span>
+          </div>
+          <div className="text-xs text-white/40">
+            Dallas, TX → Atlanta, GA
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-white/30">ETA</span>
+            <span className="text-sm font-bold text-electric tabular-nums">4h 20m</span>
+          </div>
+          {/* Mini route visualization */}
+          <div className="mt-3 flex items-center gap-2">
+            <div className="size-2 rounded-full bg-electric shadow-[0_0_6px_rgba(79,140,255,0.5)]" />
+            <div className="h-px flex-1 bg-gradient-to-r from-electric to-electric/30" />
+            <div className="size-2 rounded-full bg-[#F5A623] shadow-[0_0_6px_rgba(245,166,35,0.5)]" />
+          </div>
+        </motion.div>
+
+        {/* ─── KPI BAR — bottom left ─── */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 1.2, duration: 0.6 }}
+          className="absolute bottom-20 left-6 z-20 sm:bottom-24 sm:left-10 lg:left-10"
+        >
+          <div className="flex gap-5 rounded-xl border border-white/10 bg-[#111821]/60 px-5 py-3 backdrop-blur-md sm:gap-8 sm:px-7 sm:py-4">
+            {[
+              { label: "Active Loads", value: "36", icon: Package },
+              { label: "Available Trucks", value: "18", icon: Truck },
+              { label: "In Transit", value: "24", icon: Route },
+              { label: "Deliveries Today", value: "12", icon: CheckCircle2 },
+            ].map((kpi, i) => (
+              <motion.div
+                key={kpi.label}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 1.4 + i * 0.1, duration: 0.4 }}
+                className="flex flex-col items-center text-center"
+              >
+                <kpi.icon className="mb-1 size-4 text-electric/60" />
+                <span className="text-[10px] font-medium uppercase tracking-wider text-white/40 sm:text-xs">{kpi.label}</span>
+                <span className="mt-0.5 text-xl font-extrabold tabular-nums text-white sm:text-2xl">{kpi.value}</span>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* ─── SCROLL TO EXPLORE ─── */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 2, duration: 0.6 }}
+          className="absolute bottom-6 left-1/2 z-20 -translate-x-1/2"
+        >
+          <motion.div
+            animate={{ y: [0, 6, 0] }}
+            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+            className="flex flex-col items-center gap-1.5"
+          >
+            <Mouse className="size-4 text-white/30" />
+            <span className="text-[10px] font-medium uppercase tracking-widest text-white/25">Scroll to explore</span>
+          </motion.div>
+        </motion.div>
       </section>
 
-      <SectionDivider />
-
       {/* ═══════════════ 02 THE OPERATION ═══════════════ */}
-      <section id="operation" className="py-20 sm:py-24">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+      <section id="operation" className="py-24 sm:py-32">
+        <div className="mx-auto max-w-6xl px-6">
           <motion.div {...fadeUp} className="mx-auto max-w-2xl text-center">
             <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.15em] text-electric/60">
               <StepBadge n="02" /> The Platform
             </span>
-            <h2 className="mt-3 text-3xl font-extrabold tracking-tight">From carrier to delivery — one system</h2>
-            <p className="mt-3 text-white/40 leading-7">
+            <h2 className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">From carrier to delivery — one system</h2>
+            <p className="mt-4 text-white/40 leading-7">
               Every part of your dispatch operation connected through one database, one permission system, one interface.
             </p>
           </motion.div>
 
           {/* Visual journey: Carrier → Truck → Load → Driver → Delivery */}
-          <div className="mt-14">
+          <div className="mt-16">
             <div className="relative hidden sm:flex items-center justify-between">
               {/* Route line */}
               <motion.div
@@ -218,7 +276,7 @@ export default function Landing() {
           </div>
 
           {/* Feature grid */}
-          <div className="mt-16 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div id="features" className="mt-20 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[
               { icon: Users, title: "Lead & CRM", text: "Track carrier leads from first contact to signed agreement, then convert into active clients." },
               { icon: Building2, title: "Carrier clients", text: "Onboarding, agreements, fee configs, equipment preferences, and fleet management." },
@@ -250,19 +308,19 @@ export default function Landing() {
       <SectionDivider />
 
       {/* ═══════════════ 03 FLEET ═══════════════ */}
-      <section id="fleet" className="py-20 sm:py-24">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+      <section id="fleet" className="py-24 sm:py-32">
+        <div className="mx-auto max-w-6xl px-6">
           <motion.div {...fadeUp} className="mx-auto max-w-2xl text-center">
             <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.15em] text-electric/60">
               <StepBadge n="03" /> Fleet
             </span>
-            <h2 className="mt-3 text-3xl font-extrabold tracking-tight">Know where every truck is</h2>
-            <p className="mt-3 text-white/40">
+            <h2 className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">Know where every truck is</h2>
+            <p className="mt-4 text-white/40">
               Real-time GPS tracking, availability status, and load assignments — all in one view.
             </p>
           </motion.div>
 
-          <div className="mt-12 grid items-center gap-10 lg:grid-cols-2">
+          <div className="mt-14 grid items-center gap-12 lg:grid-cols-2">
             {/* Fleet status nodes */}
             <motion.div {...fadeUp} className="flex justify-center">
               <div className="grid grid-cols-2 gap-4">
@@ -289,8 +347,8 @@ export default function Landing() {
             </motion.div>
 
             <motion.div {...fadeUp}>
-              <img src={heroTruckImg} alt="DispatchOS fleet tracking" className="w-full h-auto max-h-[200px] rounded-xl object-cover" style={{ filter: "drop-shadow(0 12px 24px rgba(0,0,0,0.4))" }} loading="lazy" />
-              <p className="mt-4 text-sm text-white/40 leading-6">
+              <img src={heroTruckImg} alt="DispatchOS fleet tracking" className="w-full h-auto max-h-[220px] rounded-xl object-cover" style={{ filter: "drop-shadow(0 12px 24px rgba(0,0,0,0.4))" }} loading="lazy" />
+              <p className="mt-5 text-sm text-white/40 leading-6">
                 Drivers share GPS from their phone. Fleet status updates instantly.
                 Click any truck to see location history, current load, and next action.
               </p>
@@ -302,18 +360,18 @@ export default function Landing() {
       <SectionDivider />
 
       {/* ═══════════════ 04 LOAD FLOW ═══════════════ */}
-      <section id="load-flow" className="py-20 sm:py-24">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+      <section id="load-flow" className="py-24 sm:py-32">
+        <div className="mx-auto max-w-6xl px-6">
           <motion.div {...fadeUp} className="mx-auto max-w-2xl text-center">
             <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.15em] text-electric/60">
               <StepBadge n="04" /> Load Flow
             </span>
-            <h2 className="mt-3 text-3xl font-extrabold tracking-tight">From offer to paid, end to end</h2>
-            <p className="mt-3 text-white/40">
+            <h2 className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">From offer to paid, end to end</h2>
+            <p className="mt-4 text-white/40">
               Every load follows a validated workflow. No step can be skipped. Every transition is recorded.
             </p>
           </motion.div>
-          <div className="mt-12 relative">
+          <div className="mt-14 relative">
             <div className="absolute left-4 top-0 bottom-0 w-px bg-gradient-to-b from-electric/30 via-electric/10 to-transparent hidden sm:block" />
             <div className="space-y-3">
               {[
@@ -348,18 +406,18 @@ export default function Landing() {
       <SectionDivider />
 
       {/* ═══════════════ 05 DOCUMENTS + FINANCE ═══════════════ */}
-      <section className="py-20 sm:py-24">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+      <section className="py-24 sm:py-32">
+        <div className="mx-auto max-w-6xl px-6">
           <motion.div {...fadeUp} className="mx-auto max-w-2xl text-center">
             <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.15em] text-electric/60">
               <StepBadge n="05" /> Documents & Finance
             </span>
-            <h2 className="mt-3 text-3xl font-extrabold tracking-tight">Financial precision, document control</h2>
-            <p className="mt-3 text-white/40">
+            <h2 className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">Financial precision, document control</h2>
+            <p className="mt-4 text-white/40">
               Integer-precision financial records. Per-load document checklists. Secure storage.
             </p>
           </motion.div>
-          <div className="mt-12 grid gap-6 sm:grid-cols-2">
+          <div className="mt-14 grid gap-6 sm:grid-cols-2">
             <motion.div {...fadeUp} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-6">
               <Wallet className="size-6 text-[#F5A623]" />
               <h3 className="mt-4 text-lg font-bold text-white">Dispatcher Revenue</h3>
@@ -393,9 +451,9 @@ export default function Landing() {
       <SectionDivider />
 
       {/* ═══════════════ 06 AI DISPATCH INTELLIGENCE ═══════════════ */}
-      <section className="py-20 sm:py-24">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <motion.div {...fadeUp} className="grid items-center gap-10 lg:grid-cols-2">
+      <section className="py-24 sm:py-32">
+        <div className="mx-auto max-w-6xl px-6">
+          <motion.div {...fadeUp} className="grid items-center gap-12 lg:grid-cols-2">
             <div className="order-2 lg:order-1 flex justify-center">
               <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-6 w-full max-w-sm">
                 <div className="flex items-center gap-2 mb-4">
@@ -424,8 +482,8 @@ export default function Landing() {
               <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.15em] text-electric/60">
                 <StepBadge n="06" /> Intelligence
               </span>
-              <h2 className="mt-3 text-3xl font-extrabold tracking-tight">AI that understands freight</h2>
-              <p className="mt-3 text-white/40 leading-7">
+              <h2 className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">AI that understands freight</h2>
+              <p className="mt-4 text-white/40 leading-7">
                 Ask operational questions in plain language. Get answers grounded in your actual data.
                 AI drafts replies and suggests actions — humans always approve.
               </p>
@@ -450,15 +508,15 @@ export default function Landing() {
       <SectionDivider />
 
       {/* ═══════════════ 07 SECURITY ═══════════════ */}
-      <section id="security" className="py-20 sm:py-24">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <motion.div {...fadeUp} className="grid items-center gap-10 lg:grid-cols-2">
+      <section id="security" className="py-24 sm:py-32">
+        <div className="mx-auto max-w-6xl px-6">
+          <motion.div {...fadeUp} className="grid items-center gap-12 lg:grid-cols-2">
             <div>
               <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.15em] text-electric/60">
                 <StepBadge n="07" /> Security
               </span>
-              <h2 className="mt-3 text-3xl font-extrabold tracking-tight">Your data is isolated, audited, and yours</h2>
-              <p className="mt-3 text-white/40 leading-7">
+              <h2 className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">Your data is isolated, audited, and yours</h2>
+              <p className="mt-4 text-white/40 leading-7">
                 Every organization gets strict tenant isolation, role-based access, and an append-only audit trail.
               </p>
               <ul className="mt-6 space-y-3 text-sm">
@@ -496,26 +554,27 @@ export default function Landing() {
 
       <SectionDivider />
 
-      {/* ═══════════════ 08 FINAL CTA ═══════════════ */}
-      <section className="py-20 sm:py-24">
-        <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
+      {/* ═══════════════ 08 FINAL CTA — CINEMATIC ═══════════════ */}
+      <section className="relative overflow-hidden py-24 sm:py-32">
+        {/* Background truck image */}
+        <div className="absolute inset-0">
+          <img
+            src={heroTruckImg}
+            alt=""
+            className="h-full w-full object-cover object-center"
+            style={{ filter: "brightness(0.25) blur(1px)" }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#080B0F] via-[#080B0F]/80 to-[#080B0F]/60" />
+        </div>
+        <div className="relative z-10 mx-auto max-w-3xl px-6 text-center">
           <motion.div {...fadeUp}>
-            <div className="mx-auto mb-8 max-w-2xl">
-              <img
-                src={heroTruckImg}
-                alt="DispatchOS — truck at destination"
-                className="w-full h-auto rounded-xl object-cover"
-                style={{ maxHeight: 220, filter: "drop-shadow(0 20px 40px rgba(0,0,0,0.4))" }}
-                loading="lazy"
-              />
-            </div>
-            <h2 className="text-3xl font-extrabold tracking-tight">Control the road ahead.</h2>
-            <p className="mt-3 text-white/40">
+            <h2 className="text-4xl font-extrabold tracking-tight sm:text-5xl">Control the road ahead.</h2>
+            <p className="mt-4 text-lg text-white/40">
               Sign in to your workspace. Your first carrier, truck, and load can be live in minutes.
             </p>
-            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link to="/auth?returnTo=%2Fdashboard" className="w-full sm:w-auto">
-                <Button size="lg" className="w-full gap-2 bg-electric hover:bg-electric/90 text-white shadow-lg shadow-electric/20 sm:w-auto">
+                <Button size="lg" className="w-full gap-2 bg-electric hover:bg-electric/90 text-white shadow-xl shadow-electric/30 font-semibold text-base px-8 sm:w-auto">
                   Launch DispatchOS <ArrowRight className="size-4" />
                 </Button>
               </Link>
@@ -526,7 +585,7 @@ export default function Landing() {
 
       {/* ═══════════════ FOOTER ═══════════════ */}
       <footer className="border-t border-white/[0.04] py-10">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 text-sm text-white/30 sm:flex-row sm:px-6">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 text-sm text-white/30 sm:flex-row">
           <div className="flex items-center gap-2">
             <LogoIcon size={20} />
             <span className="font-semibold text-white/60">DispatchOS</span>

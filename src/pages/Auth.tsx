@@ -3,11 +3,12 @@ import { Input } from "@/components/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useAuth } from "@/hooks/use-auth";
 import { Logo } from "@/components/brand/Logo";
-import { ArrowLeft, ArrowRight, Loader2, Mail, ShieldCheck, Lock } from "lucide-react";
+import { ArrowRight, Loader2, Mail, ShieldCheck, Lock } from "lucide-react";
 import { motion } from "framer-motion";
 import { Suspense, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import type { Role } from "@/convex/constants";
+import heroTruckImg from "/hero-truck.png";
 
 interface AuthProps {
   redirectAfterAuth?: string;
@@ -25,108 +26,7 @@ function getRoleRedirect(role?: Role, returnTo?: string | null): string {
   if (returnTo?.startsWith("/") && !returnTo.startsWith("//")) return returnTo;
   if (role === "carrier_admin") return "/portal/carrier";
   if (role === "driver") return "/portal/driver";
-  // All other roles go to dashboard
   return "/dashboard";
-}
-
-/** Subtle animated route lines in the background */
-function BackgroundRoutes() {
-  return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      {/* Horizontal road lines */}
-      {[25, 50, 75].map((y) => (
-        <motion.div
-          key={y}
-          className="absolute left-0 h-px w-full"
-          style={{
-            top: `${y}%`,
-            background: "linear-gradient(90deg, transparent 0%, rgba(79,140,255,0.06) 30%, rgba(79,140,255,0.1) 50%, rgba(79,140,255,0.06) 70%, transparent 100%)",
-          }}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 2, delay: y * 0.01 }}
-        />
-      ))}
-      {/* Vertical subtle grid lines */}
-      {[20, 40, 60, 80].map((x) => (
-        <div
-          key={x}
-          className="absolute top-0 h-full w-px"
-          style={{
-            left: `${x}%`,
-            background: "linear-gradient(180deg, transparent 0%, rgba(255,255,255,0.02) 50%, transparent 100%)",
-          }}
-        />
-      ))}
-      {/* Moving dots */}
-      {[15, 35, 55, 75, 90].map((y, i) => (
-        <motion.div
-          key={`dot-${y}`}
-          className="absolute size-1 rounded-full bg-electric/20"
-          style={{ top: `${y}%`, left: "-2%" }}
-          animate={{ x: ["0%", "6000%"] }}
-          transition={{ duration: 20 + i * 5, repeat: Infinity, ease: "linear", delay: i * 3 }}
-        />
-      ))}
-    </div>
-  );
-}
-
-/** Animated truck silhouette */
-function AuthTruckVisual() {
-  return (
-    <div className="relative h-48 w-full">
-      <svg viewBox="0 0 400 160" fill="none" className="w-full h-full opacity-40">
-        {/* Road */}
-        <line x1="20" y1="100" x2="380" y2="100" stroke="rgba(79,140,255,0.15)" strokeWidth="1" />
-        <line x1="20" y1="100" x2="380" y2="100" stroke="rgba(79,140,255,0.05)" strokeWidth="1" strokeDasharray="6 4" />
-
-        {/* Route glow */}
-        <motion.line
-          x1="30" y1="100" x2="370" y2="100"
-          stroke="url(#auth-glow)" strokeWidth="1.5"
-          initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
-          transition={{ duration: 2.5, ease: "easeOut" }}
-        />
-
-        {/* Origin */}
-        <circle cx="50" cy="100" r="4" fill="rgba(79,140,255,0.3)" />
-        <motion.circle cx="50" cy="100" r="2" fill="rgba(79,140,255,0.6)"
-          animate={{ scale: [1, 1.5, 1], opacity: [0.6, 0.2, 0.6] }}
-          transition={{ duration: 2, repeat: Infinity }} />
-
-        {/* Destination */}
-        <circle cx="350" cy="100" r="4" fill="rgba(245,166,35,0.3)" />
-        <motion.circle cx="350" cy="100" r="2" fill="rgba(245,166,35,0.5)"
-          animate={{ scale: [1, 1.3, 1], opacity: [0.5, 0.2, 0.5] }}
-          transition={{ duration: 2.5, repeat: Infinity, delay: 0.5 }} />
-
-        {/* Truck */}
-        <motion.g initial={{ x: 0 }} animate={{ x: [0, 260, 0] }}
-          transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}>
-          <rect x="100" y="78" width="36" height="16" rx="2" fill="rgba(79,140,255,0.6)" />
-          <path d="M136 80h8c1.5 0 2.5 1 2.5 2.5v8c0 .5-.4 1-1 1h-9.5V80z" fill="rgba(79,140,255,0.5)" />
-          <rect x="138" y="81.5" width="5" height="3.5" rx="0.5" fill="rgba(79,140,255,0.3)" />
-          <circle cx="112" cy="96" r="3.5" fill="rgba(11,13,15,0.8)" />
-          <circle cx="112" cy="96" r="1.5" fill="rgba(255,255,255,0.1)" />
-          <circle cx="125" cy="96" r="3.5" fill="rgba(11,13,15,0.8)" />
-          <circle cx="125" cy="96" r="1.5" fill="rgba(255,255,255,0.1)" />
-          <circle cx="143" cy="96" r="3.5" fill="rgba(11,13,15,0.8)" />
-          <circle cx="143" cy="96" r="1.5" fill="rgba(255,255,255,0.1)" />
-          <motion.circle cx="146.5" cy="83" r="1" fill="#F5A623"
-            animate={{ opacity: [0.4, 0.8, 0.4] }}
-            transition={{ duration: 1.5, repeat: Infinity }} />
-        </motion.g>
-
-        <defs>
-          <linearGradient id="auth-glow" x1="30" y1="100" x2="370" y2="100">
-            <stop stopColor="#4F8CFF" stopOpacity="0.3" />
-            <stop offset="1" stopColor="#F5A623" stopOpacity="0.1" />
-          </linearGradient>
-        </defs>
-      </svg>
-    </div>
-  );
 }
 
 function Auth({ redirectAfterAuth }: AuthProps = {}) {
@@ -141,7 +41,6 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
-      // Role-based redirect
       const dest = getRoleRedirect(user?.role as Role | undefined, returnTo);
       navigate(dest, { replace: true });
     }
@@ -169,7 +68,6 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     try {
       const formData = new FormData(event.currentTarget);
       await signIn("email-otp", formData);
-      // Redirect handled by useEffect above (role-based)
     } catch {
       setError("The verification code you entered is incorrect. Please try again.");
       setIsLoading(false);
@@ -179,34 +77,43 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center bg-[#080B0F] overflow-hidden">
-      <BackgroundRoutes />
+      {/* Full-screen cinematic truck background */}
+      <div className="absolute inset-0">
+        <img
+          src={heroTruckImg}
+          alt=""
+          className="h-full w-full object-cover object-center"
+          style={{ filter: "brightness(0.3) blur(2px)" }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#080B0F] via-[#080B0F]/80 to-[#080B0F]/40" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#080B0F]/90 via-transparent to-[#080B0F]/50" />
+      </div>
 
-      <div className="relative z-10 grid w-full max-w-4xl gap-8 px-4 py-10 lg:grid-cols-2 lg:gap-14">
+      {/* Content */}
+      <div className="relative z-10 grid w-full max-w-5xl gap-8 px-4 py-10 lg:grid-cols-2 lg:gap-16">
         {/* Brand panel — desktop only */}
         <div className="hidden flex-col justify-center lg:flex">
           <Link to="/" className="flex items-center gap-2.5">
             <Logo size="lg" variant="full" className="[&_span]:text-white [&_span]:font-extrabold [&_span]:text-xl" />
           </Link>
-          <h1 className="mt-8 text-3xl font-extrabold leading-tight tracking-tight text-white">
+          <h1 className="mt-10 text-4xl font-extrabold leading-tight tracking-tight text-white">
             Your dispatch operation,
             <br />
             <span className="text-electric">in one place.</span>
           </h1>
-          <p className="mt-3 max-w-sm text-sm leading-6 text-white/50">
+          <p className="mt-4 max-w-md text-base leading-7 text-white/50">
             Sign in to manage carriers, trucks, drivers, loads, brokers, documents, and invoices —
             with secure, audited, tenant-isolated records.
           </p>
 
-          <AuthTruckVisual />
-
-          <ul className="mt-6 space-y-2.5 text-sm">
+          <ul className="mt-8 space-y-3 text-sm">
             {[
               "Email verification codes — no stored passwords",
               "Private platform — admin-invited accounts only",
               "Role-based access and full audit trail",
             ].map((t) => (
               <li key={t} className="flex items-start gap-2.5 text-white/40">
-                <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-electric/60" />
+                <ShieldCheck className="mt-0.5 size-4 shrink-0 text-electric/60" />
                 {t}
               </li>
             ))}
