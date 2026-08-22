@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { KpiCard, AiInsightCard, StatusBadge, EmptyState, PageHeader } from "@/components/app/Premium";
-import { TruckHero } from "@/components/brand/TruckHero";
+import heroTruckImg from "/hero-truck.png";
 import { fmtDateTime, fmtDate, fmtRelative } from "@/lib/dates";
 import { statusClass } from "@/lib/status";
 import { cn } from "@/lib/utils";
@@ -148,7 +148,7 @@ export default function Dashboard() {
           transition={{ delay: 0.05 }}
           className="hidden rounded-2xl border border-border/50 bg-card p-4 lg:flex lg:col-span-2 flex-col items-center justify-center"
         >
-          <TruckHero width={500} height={280} status={summary.ops.activeLoads > 0 ? "moving" : "idle"} showMarkers />
+          <img src={heroTruckImg} alt="DispatchOS fleet" className="w-full h-auto max-h-[280px] rounded-xl object-cover" style={{ filter: "drop-shadow(0 15px 30px rgba(0,0,0,0.4))" }} loading="lazy" />
           <p className="mt-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">
             {summary.ops.activeLoads > 0 ? "Fleet in motion" : "Fleet standing by"}
           </p>

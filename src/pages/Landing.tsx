@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Logo, LogoIcon } from "@/components/brand/Logo";
-import { TruckHero } from "@/components/brand/TruckHero";
+import heroTruckImg from "/hero-truck.png";
 import {
   ArrowRight,
   BarChart3,
@@ -124,16 +124,27 @@ export default function Landing() {
               </motion.div>
             </div>
 
-            {/* Right: animated truck */}
-            <motion.div {...fadeUp} className="flex justify-center lg:justify-end">
-              <div className="relative w-full max-w-lg">
-                <TruckHero width={700} height={380} status="moving" showMarkers />
+            {/* Right: large realistic truck hero */}
+            <motion.div {...fadeUp} className="flex justify-end">
+              <div className="relative w-full">
+                {/* Cinematic road environment with raster truck */}
+                <div className="relative">
+                  <img
+                    src={heroTruckImg}
+                    alt="DispatchOS — premium semi-truck on dark highway"
+                    className="w-full h-auto rounded-2xl object-cover"
+                    style={{ maxHeight: 520, filter: "drop-shadow(0 30px 60px rgba(0,0,0,0.5))" }}
+                    loading="eager"
+                  />
+                  {/* Route overlay line */}
+                  <div className="absolute bottom-[18%] left-[8%] right-[8%] h-px" style={{ background: "linear-gradient(90deg, #4F8CFF, transparent 20%, transparent 80%, #F5A623)" }} />
+                </div>
                 {/* Floating badges */}
                 <motion.div
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 1.5, duration: 0.5 }}
-                  className="absolute -left-2 top-8 rounded-lg border border-electric/20 bg-[#111821]/90 px-3 py-1.5 backdrop-blur-sm"
+                  className="absolute -left-2 top-6 rounded-lg border border-electric/20 bg-[#111821]/90 px-3 py-1.5 backdrop-blur-sm"
                 >
                   <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-electric">
                     <span className="size-1.5 rounded-full bg-[#22C55E] animate-pulse" />
@@ -144,7 +155,7 @@ export default function Landing() {
                   initial={{ opacity: 0, x: 10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 2, duration: 0.5 }}
-                  className="absolute -right-2 bottom-12 rounded-lg border border-[#F5A623]/20 bg-[#111821]/90 px-3 py-1.5 backdrop-blur-sm"
+                  className="absolute -right-2 bottom-16 rounded-lg border border-[#F5A623]/20 bg-[#111821]/90 px-3 py-1.5 backdrop-blur-sm"
                 >
                   <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-[#F5A623]">
                     Load #1042
@@ -278,7 +289,7 @@ export default function Landing() {
             </motion.div>
 
             <motion.div {...fadeUp}>
-              <TruckHero width={420} height={200} status="moving" showMarkers />
+              <img src={heroTruckImg} alt="DispatchOS fleet tracking" className="w-full h-auto max-h-[200px] rounded-xl object-cover" style={{ filter: "drop-shadow(0 12px 24px rgba(0,0,0,0.4))" }} loading="lazy" />
               <p className="mt-4 text-sm text-white/40 leading-6">
                 Drivers share GPS from their phone. Fleet status updates instantly.
                 Click any truck to see location history, current load, and next action.
@@ -489,8 +500,14 @@ export default function Landing() {
       <section className="py-20 sm:py-24">
         <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
           <motion.div {...fadeUp}>
-            <div className="mx-auto mb-8 max-w-md">
-              <TruckHero width={400} height={140} status="arrived" showMarkers />
+            <div className="mx-auto mb-8 max-w-2xl">
+              <img
+                src={heroTruckImg}
+                alt="DispatchOS — truck at destination"
+                className="w-full h-auto rounded-xl object-cover"
+                style={{ maxHeight: 220, filter: "drop-shadow(0 20px 40px rgba(0,0,0,0.4))" }}
+                loading="lazy"
+              />
             </div>
             <h2 className="text-3xl font-extrabold tracking-tight">Control the road ahead.</h2>
             <p className="mt-3 text-white/40">

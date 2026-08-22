@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import { PageHeader, StatCard, SectionCard, StatusBadge, Money, EmptyState, errorMessage } from "@/components/app/shared";
 import { KpiCard, AiInsightCard } from "@/components/app/Premium";
-import { TruckHero } from "@/components/brand/TruckHero";
+import heroTruckImg from "/hero-truck.png";
 import { Logo } from "@/components/brand/Logo";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -88,7 +88,7 @@ export default function PortalCarrier() {
             </div>
           </div>
           <div className="hidden w-[300px] shrink-0 items-center justify-center lg:flex">
-            <TruckHero width={480} height={260} status={activeLoads.length > 0 ? "moving" : "idle"} showMarkers />
+            <img src={heroTruckImg} alt="Fleet operations" className="w-full h-auto max-h-[260px] rounded-xl object-cover" style={{ filter: "drop-shadow(0 15px 30px rgba(0,0,0,0.4))" }} loading="lazy" />
           </div>
         </div>
       </div>
