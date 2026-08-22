@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import { PageHeader, StatCard, SectionCard, StatusBadge, Money, EmptyState, errorMessage } from "@/components/app/shared";
 import { KpiCard, AiInsightCard } from "@/components/app/Premium";
-import heroTruckImg from "/assets/publichero-truck.png";
+import heroTruckImg from "/assets/publichero.png";
 import { Logo } from "@/components/brand/Logo";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";

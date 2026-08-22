@@ -2,13 +2,12 @@ import { motion } from "framer-motion";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Logo, LogoIcon } from "@/components/brand/Logo";
-import heroTruckImg from "/assets/publichero-truck.png";
+import heroTruckImg from "/assets/publichero.png";
 import {
   ArrowRight,
   BarChart3,
   Building2,
   CheckCircle2,
-  ChevronDown,
   FileText,
   MessageSquare,
   Mouse,
@@ -78,13 +77,10 @@ export default function Landing() {
             src={heroTruckImg}
             alt=""
             className="h-full w-full object-cover object-center"
-            style={{ filter: "brightness(0.7)" }}
+            style={{ filter: "brightness(0.85)" }}
           />
-          {/* Dark gradient overlays for text readability */}
-          <div className="absolute inset-0 bg-gradient-to-r from-[#080B0F] via-[#080B0F]/70 to-transparent" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#080B0F] via-transparent to-[#080B0F]/30" />
-          {/* Subtle blue ambient at top */}
-          <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 40% 30% at 20% 20%, rgba(79,140,255,0.08) 0%, transparent 70%)" }} />
+          {/* Left gradient for text readability */}
+          <div className="absolute inset-0 bg-gradient-to-r from-[#080B0F]/90 via-[#080B0F]/40 to-transparent" />
         </div>
 
         {/* Content overlay */}
@@ -150,64 +146,6 @@ export default function Landing() {
             </motion.div>
           </div>
         </div>
-
-        {/* ─── FLOATING ROUTE CARD — top right ─── */}
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 1.5, duration: 0.6 }}
-          className="absolute right-6 top-28 z-20 hidden rounded-xl border border-white/10 bg-[#111821]/80 p-4 backdrop-blur-md sm:block lg:right-10"
-        >
-          <div className="mb-3 flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-white/60">Load #1042</span>
-            <span className="flex items-center gap-1 text-[10px] font-semibold text-[#22C55E]">
-              <span className="size-1.5 rounded-full bg-[#22C55E]" />
-              In Transit
-            </span>
-          </div>
-          <div className="text-xs text-white/40">
-            Dallas, TX → Atlanta, GA
-          </div>
-          <div className="mt-2 flex items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-white/30">ETA</span>
-            <span className="text-sm font-bold text-electric tabular-nums">4h 20m</span>
-          </div>
-          {/* Mini route visualization */}
-          <div className="mt-3 flex items-center gap-2">
-            <div className="size-2 rounded-full bg-electric shadow-[0_0_6px_rgba(79,140,255,0.5)]" />
-            <div className="h-px flex-1 bg-gradient-to-r from-electric to-electric/30" />
-            <div className="size-2 rounded-full bg-[#F5A623] shadow-[0_0_6px_rgba(245,166,35,0.5)]" />
-          </div>
-        </motion.div>
-
-        {/* ─── KPI BAR — bottom left ─── */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 1.2, duration: 0.6 }}
-          className="absolute bottom-20 left-6 z-20 sm:bottom-24 sm:left-10 lg:left-10"
-        >
-          <div className="flex gap-5 rounded-xl border border-white/10 bg-[#111821]/60 px-5 py-3 backdrop-blur-md sm:gap-8 sm:px-7 sm:py-4">
-            {[
-              { label: "Active Loads", value: "36", icon: Package },
-              { label: "Available Trucks", value: "18", icon: Truck },
-              { label: "In Transit", value: "24", icon: Route },
-              { label: "Deliveries Today", value: "12", icon: CheckCircle2 },
-            ].map((kpi, i) => (
-              <motion.div
-                key={kpi.label}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 1.4 + i * 0.1, duration: 0.4 }}
-                className="flex flex-col items-center text-center"
-              >
-                <kpi.icon className="mb-1 size-4 text-electric/60" />
-                <span className="text-[10px] font-medium uppercase tracking-wider text-white/40 sm:text-xs">{kpi.label}</span>
-                <span className="mt-0.5 text-xl font-extrabold tabular-nums text-white sm:text-2xl">{kpi.value}</span>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
 
         {/* ─── SCROLL TO EXPLORE ─── */}
         <motion.div
@@ -307,64 +245,12 @@ export default function Landing() {
 
       <SectionDivider />
 
-      {/* ═══════════════ 03 FLEET ═══════════════ */}
-      <section id="fleet" className="py-24 sm:py-32">
-        <div className="mx-auto max-w-6xl px-6">
-          <motion.div {...fadeUp} className="mx-auto max-w-2xl text-center">
-            <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.15em] text-electric/60">
-              <StepBadge n="03" /> Fleet
-            </span>
-            <h2 className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">Know where every truck is</h2>
-            <p className="mt-4 text-white/40">
-              Real-time GPS tracking, availability status, and load assignments — all in one view.
-            </p>
-          </motion.div>
-
-          <div className="mt-14 grid items-center gap-12 lg:grid-cols-2">
-            {/* Fleet status nodes */}
-            <motion.div {...fadeUp} className="flex justify-center">
-              <div className="grid grid-cols-2 gap-4">
-                {[
-                  { status: "AVAILABLE", color: "#22C55E", count: "—" },
-                  { status: "BOOKED", color: "#4F8CFF", count: "—" },
-                  { status: "IN TRANSIT", color: "#8B5CF6", count: "—" },
-                  { status: "DELIVERED", color: "#F5A623", count: "—" },
-                ].map((s, i) => (
-                  <motion.div
-                    key={s.status}
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    whileInView={{ opacity: 1, scale: 1 }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 0.4, delay: i * 0.1 }}
-                    className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 text-center"
-                  >
-                    <div className="mx-auto size-3 rounded-full" style={{ background: s.color, boxShadow: `0 0 12px ${s.color}40` }} />
-                    <p className="mt-3 text-xs font-bold uppercase tracking-wider" style={{ color: s.color }}>{s.status}</p>
-                    <p className="mt-1 text-2xl font-extrabold text-white tabular-nums">{s.count}</p>
-                  </motion.div>
-                ))}
-              </div>
-            </motion.div>
-
-            <motion.div {...fadeUp}>
-              <img src={heroTruckImg} alt="DispatchOS fleet tracking" className="w-full h-auto max-h-[220px] rounded-xl object-cover" style={{ filter: "drop-shadow(0 12px 24px rgba(0,0,0,0.4))" }} loading="lazy" />
-              <p className="mt-5 text-sm text-white/40 leading-6">
-                Drivers share GPS from their phone. Fleet status updates instantly.
-                Click any truck to see location history, current load, and next action.
-              </p>
-            </motion.div>
-          </div>
-        </div>
-      </section>
-
-      <SectionDivider />
-
-      {/* ═══════════════ 04 LOAD FLOW ═══════════════ */}
+      {/* ═══════════════ 03 LOAD FLOW ═══════════════ */}
       <section id="load-flow" className="py-24 sm:py-32">
         <div className="mx-auto max-w-6xl px-6">
           <motion.div {...fadeUp} className="mx-auto max-w-2xl text-center">
             <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.15em] text-electric/60">
-              <StepBadge n="04" /> Load Flow
+              <StepBadge n="03" /> Load Flow
             </span>
             <h2 className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">From offer to paid, end to end</h2>
             <p className="mt-4 text-white/40">
@@ -410,7 +296,7 @@ export default function Landing() {
         <div className="mx-auto max-w-6xl px-6">
           <motion.div {...fadeUp} className="mx-auto max-w-2xl text-center">
             <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.15em] text-electric/60">
-              <StepBadge n="05" /> Documents & Finance
+              <StepBadge n="04" /> Documents & Finance
             </span>
             <h2 className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">Financial precision, document control</h2>
             <p className="mt-4 text-white/40">
@@ -480,7 +366,7 @@ export default function Landing() {
             </div>
             <div className="order-1 lg:order-2">
               <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.15em] text-electric/60">
-                <StepBadge n="06" /> Intelligence
+                <StepBadge n="05" /> Intelligence
               </span>
               <h2 className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">AI that understands freight</h2>
               <p className="mt-4 text-white/40 leading-7">
@@ -513,7 +399,7 @@ export default function Landing() {
           <motion.div {...fadeUp} className="grid items-center gap-12 lg:grid-cols-2">
             <div>
               <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.15em] text-electric/60">
-                <StepBadge n="07" /> Security
+                <StepBadge n="06" /> Security
               </span>
               <h2 className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">Your data is isolated, audited, and yours</h2>
               <p className="mt-4 text-white/40 leading-7">
@@ -562,7 +448,7 @@ export default function Landing() {
             src={heroTruckImg}
             alt=""
             className="h-full w-full object-cover object-center"
-            style={{ filter: "brightness(0.25) blur(1px)" }}
+            style={{ filter: "brightness(0.3)" }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-[#080B0F] via-[#080B0F]/80 to-[#080B0F]/60" />
         </div>

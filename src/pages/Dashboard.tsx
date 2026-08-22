@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { KpiCard, AiInsightCard, StatusBadge, EmptyState, PageHeader } from "@/components/app/Premium";
-import heroTruckImg from "/assets/publichero-truck.png";
+import heroTruckImg from "/assets/publichero.png";
 import { fmtDateTime, fmtDate, fmtRelative } from "@/lib/dates";
 import { statusClass } from "@/lib/status";
 import { cn } from "@/lib/utils";
