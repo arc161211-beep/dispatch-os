@@ -7,7 +7,6 @@ import { api } from "@/convex/_generated/api";
 import { AIAssistant } from "@/components/app/AIAssistant";
 import { PageHeader, StatusBadge, SectionCard, EmptyState, errorMessage } from "@/components/app/shared";
 import { Logo } from "@/components/brand/Logo";
-import heroTruckImg from "/hero-truck.png";
 import { Button } from "@/components/ui/button";
 import { fmtDate, fmtDateTime } from "@/lib/dates";
 import { useTimezone } from "@/hooks/use-app";
