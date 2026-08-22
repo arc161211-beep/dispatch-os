@@ -8,7 +8,7 @@ import { motion } from "framer-motion";
 import { Suspense, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import type { Role } from "@/convex/constants";
-import heroTruckImg from "/hero-truck.png";
+import heroTruckImg from "/assets/publichero-truck.png";
 
 interface AuthProps {
   redirectAfterAuth?: string;

@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Logo, LogoIcon } from "@/components/brand/Logo";
-import heroTruckImg from "/hero-truck.png";
+import heroTruckImg from "/assets/publichero-truck.png";
 import {
   ArrowRight,
   BarChart3,
