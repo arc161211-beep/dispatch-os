@@ -31,7 +31,7 @@ export default function Assistant() {
     setMessages((prev) => [...prev, { role: "user", content: userMsg }]);
     setBusy(true);
     try {
-      const res = await chat({ message: userMsg, conversationId: convId as any });
+      const res = await chat({ message: userMsg, ...(convId ? { conversationId: convId as any } : {}) });
       if (!res.configured) {
         setMessages((prev) => [...prev, { role: "assistant", content: "AI is not configured. Add NVIDIA_API_KEY, NVIDIA_BASE_URL, and NVIDIA_MODEL to your environment to enable the assistant." }]);
       } else if (res.reply) {
