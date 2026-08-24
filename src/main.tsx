@@ -9,6 +9,8 @@ import { ConvexReactClient } from "convex/react";
 import React, { StrictMode, useEffect, lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router";
+import { useRole } from "@/hooks/use-app";
+import { authorizePath } from "@/lib/roles";
 import { ThemeProvider } from "next-themes";
 import "./index.css";
 
@@ -138,6 +140,10 @@ function RouteSyncer() {
   return null;
 }
 
+/**
+ * Protected route: requires authentication + valid Convex session.
+ * AppInit inside AppShell handles workspace provisioning.
+ */
 const Protected = ({ children }: { children: React.ReactNode }) => {
   const { isLoading, isAuthenticated } = useAuth();
   const location = useLocation();
@@ -147,6 +153,23 @@ const Protected = ({ children }: { children: React.ReactNode }) => {
     return <Navigate to={`/auth?returnTo=${encodeURIComponent(returnTo)}`} replace />;
   }
   return <AppShell>{children}</AppShell>;
+};
+
+/**
+ * Role-gated route: after AppShell has provisioned the user, checks that
+ * the authenticated user's role is authorized for this specific path.
+ * If not, redirects to the role's canonical destination.
+ */
+const RoleGate = ({ children }: { children: React.ReactNode }) => {
+  const role = useRole();
+  const location = useLocation();
+  // role may be undefined while AppInit is still provisioning
+  if (!role) return null;
+  const redirectTo = authorizePath(location.pathname, role);
+  if (redirectTo) {
+    return <Navigate to={redirectTo} replace />;
+  }
+  return <>{children}</>;
 };
 
 createRoot(document.getElementById("root")!).render(
@@ -164,33 +187,36 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/" element={<Landing />} />
                 <Route path="/auth" element={<AuthPage redirectAfterAuth="/dashboard" />} />
                 {/* Note: No public signup route — access is invite-only */}
-                <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
-                <Route path="/leads" element={<Protected><Leads /></Protected>} />
-                <Route path="/carriers" element={<Protected><Carriers /></Protected>} />
-                <Route path="/carriers/:id" element={<Protected><CarrierDetail /></Protected>} />
-                <Route path="/trucks" element={<Protected><Trucks /></Protected>} />
-                <Route path="/trucks/:id" element={<Protected><TruckDetail /></Protected>} />
-                <Route path="/drivers" element={<Protected><Drivers /></Protected>} />
-                <Route path="/drivers/:id" element={<Protected><DriverDetail /></Protected>} />
-                <Route path="/brokers" element={<Protected><Brokers /></Protected>} />
-                <Route path="/shippers" element={<Protected><Shippers /></Protected>} />
-                <Route path="/loads" element={<Protected><Loads /></Protected>} />
-                <Route path="/loads/:id" element={<Protected><LoadDetail /></Protected>} />
-                <Route path="/messages" element={<Protected><Messages /></Protected>} />
-                <Route path="/documents" element={<Protected><Documents /></Protected>} />
-                <Route path="/tasks" element={<Protected><Tasks /></Protected>} />
-                <Route path="/calendar" element={<Protected><Calendar /></Protected>} />
-                <Route path="/finance" element={<Protected><Finance /></Protected>} />
-                <Route path="/reports" element={<Protected><Reports /></Protected>} />
-                <Route path="/assistant" element={<Protected><Assistant /></Protected>} />
-                <Route path="/notifications" element={<Protected><Notifications /></Protected>} />
-                <Route path="/integrations" element={<Protected><Integrations /></Protected>} />
-                <Route path="/settings" element={<Protected><SettingsPage /></Protected>} />
-                <Route path="/users" element={<Protected><UserManagement /></Protected>} />
-                <Route path="/audit" element={<Protected><AuditLog /></Protected>} />
-                <Route path="/status" element={<Protected><StatusPage /></Protected>} />
-                <Route path="/portal/driver" element={<Protected><PortalDriver /></Protected>} />
-                <Route path="/portal/carrier" element={<Protected><PortalCarrier /></Protected>} />
+                {/* ── Admin / Dispatcher / Operations routes ── */}
+                <Route path="/dashboard" element={<Protected><RoleGate><Dashboard /></RoleGate></Protected>} />
+                <Route path="/leads" element={<Protected><RoleGate><Leads /></RoleGate></Protected>} />
+                <Route path="/carriers" element={<Protected><RoleGate><Carriers /></RoleGate></Protected>} />
+                <Route path="/carriers/:id" element={<Protected><RoleGate><CarrierDetail /></RoleGate></Protected>} />
+                <Route path="/trucks" element={<Protected><RoleGate><Trucks /></RoleGate></Protected>} />
+                <Route path="/trucks/:id" element={<Protected><RoleGate><TruckDetail /></RoleGate></Protected>} />
+                <Route path="/drivers" element={<Protected><RoleGate><Drivers /></RoleGate></Protected>} />
+                <Route path="/drivers/:id" element={<Protected><RoleGate><DriverDetail /></RoleGate></Protected>} />
+                <Route path="/brokers" element={<Protected><RoleGate><Brokers /></RoleGate></Protected>} />
+                <Route path="/shippers" element={<Protected><RoleGate><Shippers /></RoleGate></Protected>} />
+                <Route path="/loads" element={<Protected><RoleGate><Loads /></RoleGate></Protected>} />
+                <Route path="/loads/:id" element={<Protected><RoleGate><LoadDetail /></RoleGate></Protected>} />
+                <Route path="/messages" element={<Protected><RoleGate><Messages /></RoleGate></Protected>} />
+                <Route path="/documents" element={<Protected><RoleGate><Documents /></RoleGate></Protected>} />
+                <Route path="/tasks" element={<Protected><RoleGate><Tasks /></RoleGate></Protected>} />
+                <Route path="/calendar" element={<Protected><RoleGate><Calendar /></RoleGate></Protected>} />
+                <Route path="/finance" element={<Protected><RoleGate><Finance /></RoleGate></Protected>} />
+                <Route path="/reports" element={<Protected><RoleGate><Reports /></RoleGate></Protected>} />
+                <Route path="/assistant" element={<Protected><RoleGate><Assistant /></RoleGate></Protected>} />
+                <Route path="/notifications" element={<Protected><RoleGate><Notifications /></RoleGate></Protected>} />
+                <Route path="/integrations" element={<Protected><RoleGate><Integrations /></RoleGate></Protected>} />
+                <Route path="/settings" element={<Protected><RoleGate><SettingsPage /></RoleGate></Protected>} />
+                <Route path="/users" element={<Protected><RoleGate><UserManagement /></RoleGate></Protected>} />
+                <Route path="/audit" element={<Protected><RoleGate><AuditLog /></RoleGate></Protected>} />
+                <Route path="/status" element={<Protected><RoleGate><StatusPage /></RoleGate></Protected>} />
+                {/* ── Driver portal (driver role only) ── */}
+                <Route path="/portal/driver" element={<Protected><RoleGate><PortalDriver /></RoleGate></Protected>} />
+                {/* ── Carrier portal (carrier_admin role only) ── */}
+                <Route path="/portal/carrier" element={<Protected><RoleGate><PortalCarrier /></RoleGate></Protected>} />
                 <Route path="/track/:token" element={<TrackingPage />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>

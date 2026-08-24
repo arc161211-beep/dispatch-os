@@ -194,6 +194,7 @@ export const getOrgUsers = query({
         phone: p.phone ?? "",
         role: p.role as Role,
         carrierId: p.carrierId ?? undefined,
+        driverId: p.driverId ?? undefined,
         status: p.status,
         createdAt: p.createdAt,
         expiresAt: p.expiresAt,

@@ -57,6 +57,7 @@ import {
   Clock,
   Search,
   Users,
+  UserRound,
   CheckCircle2,
   XCircle,
   AlertTriangle,
@@ -295,11 +296,21 @@ export default function UserManagement() {
                 <div key={invite._id} className="flex items-center justify-between gap-4 px-4 py-3">
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">{invite.email}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                       <Badge variant="outline" className="text-xs">
                         {ROLE_LABELS[invite.role as Role] ?? invite.role}
                       </Badge>
-                      <span className="text-xs text-muted-foreground">
+                      {invite.carrierId && (
+                        <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                          <Building2 className="size-3" /> {carriers?.find((c: any) => c._id === invite.carrierId)?.companyName ?? "Carrier"}
+                        </span>
+                      )}
+                      {invite.driverId && (
+                        <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                          <UserRound className="size-3" /> Driver linked
+                        </span>
+                      )}
+                      <span className="text-[10px] text-muted-foreground">
                         Invited {fmtDateTime(invite.createdAt, tz)}
                       </span>
                     </div>

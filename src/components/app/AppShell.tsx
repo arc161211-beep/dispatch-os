@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { getRoleDestination } from "@/lib/roles";
 import { CommandPalette } from "./CommandPalette";
 import { Logo } from "@/components/brand/Logo";
 import {
@@ -376,7 +377,9 @@ function ShellContent({ children }: { children: ReactNode }) {
 
   const handleSignOut = async () => {
     await signOut();
-    navigate("/");
+    // Force full page reload to clear all Convex/React cached state
+    // This prevents stale role data from persisting across sessions
+    window.location.href = "/";
   };
 
   const initials = (user?.name ?? "U")

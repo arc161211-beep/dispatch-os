@@ -5,46 +5,63 @@ import { useAuth } from "@/hooks/use-auth";
 import { Logo } from "@/components/brand/Logo";
 import { ArrowRight, Loader2, Mail, ShieldCheck, Lock } from "lucide-react";
 import { motion } from "framer-motion";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, useCallback } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import type { Role } from "@/convex/constants";
+import { resolveLoginDestination } from "@/lib/roles";
 import heroTruckImg from "/assets/publichero.png";
 
 interface AuthProps {
   redirectAfterAuth?: string;
 }
 
-function resolveRedirectAfterAuth(returnTo: string | null, fallback = "/dashboard") {
-  if (returnTo?.startsWith("/") && !returnTo.startsWith("//")) {
-    return returnTo;
-  }
-  return fallback;
-}
-
-/** Role-based redirect: each role goes to its own portal */
-function getRoleRedirect(role?: Role, returnTo?: string | null): string {
-  if (returnTo?.startsWith("/") && !returnTo.startsWith("//")) return returnTo;
-  if (role === "carrier_admin") return "/portal/carrier";
-  if (role === "driver") return "/portal/driver";
-  return "/dashboard";
-}
-
 function Auth({ redirectAfterAuth }: AuthProps = {}) {
   const { isLoading: authLoading, isAuthenticated, user, signIn } = useAuth();
   const navigate = useNavigate();
+  const provision = useMutation(api.users.provision);
   const [searchParams] = useSearchParams();
   const returnTo = searchParams.get("returnTo");
   const [step, setStep] = useState<"signIn" | { email: string }>("signIn");
   const [otp, setOtp] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [redirecting, setRedirecting] = useState(false);
+
+  /**
+   * After authentication, wait for provisioning, then resolve the
+   * fresh role from the database and redirect accordingly.
+   */
+  const handlePostAuthRedirect = useCallback(async () => {
+    if (!isAuthenticated || redirecting) return;
+
+    // If user has no orgId yet, trigger provisioning and wait
+    if (!user?.orgId) {
+      try {
+        await provision();
+        // user object will update reactively after provision patch
+      } catch {
+        // Provisioning failed — the AppInit component will show the error
+        return;
+      }
+    }
+
+    // Only redirect once we have a fresh role from the DB
+    // The user object updates reactively via Convex, so once orgId
+    // exists and role is set, proceed.
+    if (user?.role) {
+      setRedirecting(true);
+      const dest = resolveLoginDestination(user.role as Role, returnTo);
+      navigate(dest, { replace: true });
+    }
+  }, [isAuthenticated, user, provision, returnTo, navigate, redirecting]);
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
-      const dest = getRoleRedirect(user?.role as Role | undefined, returnTo);
-      navigate(dest, { replace: true });
+      handlePostAuthRedirect();
     }
-  }, [authLoading, isAuthenticated, user, navigate, returnTo]);
+  }, [authLoading, isAuthenticated, handlePostAuthRedirect]);
 
   const handleEmailSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
