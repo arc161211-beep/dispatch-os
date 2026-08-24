@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
-import { DRIVER_STATUSES } from "@/convex/constants";
+import { DRIVER_STATUSES, ROLES } from "@/convex/constants";
 import { useCanWrite, useTimezone } from "@/hooks/use-app";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -11,7 +11,7 @@ import { PageHeader, StatusBadge, NextActionPill, LoadingState, EmptyState, erro
 import { Field, Grid, SelectInput, TextArea, TextInput } from "@/components/app/forms";
 import { ResponsiveTable, type Column } from "@/components/app/ResponsiveTable";
 import { ImportCsvDialog, ExportCsvButton } from "@/components/app/ImportExport";
-import { Search, UserRound, Plus, ExternalLink } from "lucide-react";
+import { Search, UserRound, Plus, ExternalLink, UserPlus } from "lucide-react";
 import { nextAction } from "@/lib/status";
 import { fmtDate } from "@/lib/dates";
 import { useTimezone as useTz } from "@/hooks/use-app";
@@ -27,6 +27,7 @@ export default function Drivers() {
   const [debounced, setDebounced] = useState("");
   const [availability, setAvailability] = useState("");
   const [dialog, setDialog] = useState<"create" | DriverType | null>(null);
+  const [inviteDialog, setInviteDialog] = useState<DriverType | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search), 250);
@@ -39,6 +40,7 @@ export default function Drivers() {
 
   const drivers = useQuery(api.drivers.list, { search: debounced || undefined, availability: availability || undefined });
   const carriers = useQuery(api.carriers.list, {});
+  const inviteUser = useMutation(api.users.inviteUser);
   const setAvail = useMutation(api.drivers.setAvailability);
 
   const handleAvail = async (d: DriverType, val: string) => {
@@ -56,6 +58,11 @@ export default function Drivers() {
         <Link to={`/drivers/${d._id}`} onClick={(e) => e.stopPropagation()} className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-muted transition-colors" title="View details">
           <ExternalLink className="size-4 text-muted-foreground" />
         </Link>
+        {d.email && (
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); setInviteDialog(d); }} title="Invite as DispatchOS user">
+            <UserPlus className="size-3.5" />
+          </Button>
+        )}
         <SelectInput value={d.availability} onChange={(e) => handleAvail(d, e.target.value)} className="h-8 w-32 text-xs" onClick={(e) => e.stopPropagation()}>
           {DRIVER_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
         </SelectInput>
@@ -87,6 +94,25 @@ export default function Drivers() {
           empty={<EmptyState icon={<UserRound className="size-6" />} title="No drivers yet" description="Add your first driver or import a CSV." action={canWrite ? <Button size="sm" onClick={() => setDialog("create")}><Plus className="size-3.5" /> New driver</Button> : undefined} />} />
       )}
       {dialog && <DriverFormDialog driver={dialog === "create" ? null : dialog} carriers={carriers ?? []} onClose={() => setDialog(null)} />}
+      {inviteDialog && (
+        <InviteDriverDialog
+          driver={inviteDialog}
+          onClose={() => setInviteDialog(null)}
+          onInvite={async () => {
+            if (!inviteDialog.email) { toast.error("Driver has no email address."); return; }
+            try {
+              await inviteUser({
+                email: inviteDialog.email,
+                role: "driver" as any,
+                name: inviteDialog.name,
+                driverId: inviteDialog._id as any,
+              });
+              toast.success(`Invitation sent to ${inviteDialog.email}`);
+              setInviteDialog(null);
+            } catch (e) { toast.error(errorMessage(e)); }
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -143,6 +169,51 @@ function DriverFormDialog({ driver, carriers, onClose }: { driver: DriverType | 
             <Button type="submit" disabled={busy}>{busy ? "Saving…" : driver ? "Save changes" : "Create driver"}</Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function InviteDriverDialog({ driver, onClose, onInvite }: { driver: DriverType; onClose: () => void; onInvite: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const handleConfirm = async () => {
+    setBusy(true);
+    try { await onInvite(); } finally { setBusy(false); }
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Invite Driver as User</DialogTitle>
+          <DialogDescription>
+            Create a DispatchOS login for this driver. They will be able to sign in using their email and access the Driver Portal.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 rounded-lg border border-border/60 bg-muted/30 p-4">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground w-14">Name</span>
+            <span className="text-sm font-medium">{driver.name}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground w-14">Email</span>
+            <span className="text-sm font-medium">{driver.email ?? "—"}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground w-14">Role</span>
+            <span className="text-sm font-medium">Driver</span>
+          </div>
+        </div>
+        {!driver.email && (
+          <p className="text-xs text-[#EF4444]">This driver has no email address. Add an email before inviting.</p>
+        )}
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleConfirm} disabled={busy || !driver.email} className="gap-1.5">
+            <UserPlus className="size-3.5" />
+            {busy ? "Sending…" : "Send Invitation"}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

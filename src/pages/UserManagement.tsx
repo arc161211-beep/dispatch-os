@@ -88,6 +88,7 @@ export default function UserManagement() {
   const tz = useTimezone();
   const userData = useQuery(api.users.getOrgUsers);
   const carriers = useQuery(api.carriers.list, {});
+  const driversList = useQuery(api.drivers.list, {});
   const setAccountStatus = useMutation(api.users.setAccountStatus);
   const updateUserRole = useMutation(api.users.updateUserRole);
   const assignCarrier = useMutation(api.users.assignCarrier);
@@ -338,7 +339,7 @@ export default function UserManagement() {
       </Tabs>
 
       {/* Invite dialog */}
-      <InviteUserDialog open={inviteDialog} onOpenChange={setInviteDialog} carriers={carriers ?? []} />
+      <InviteUserDialog open={inviteDialog} onOpenChange={setInviteDialog} carriers={carriers ?? []} drivers={driversList ?? []} />
 
       {/* Edit user dialog */}
       {editingUser && (
@@ -458,26 +459,38 @@ function InviteUserDialog({
   open,
   onOpenChange,
   carriers,
+  drivers,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   carriers: any[];
+  drivers: any[];
 }) {
   const inviteUser = useMutation(api.users.inviteUser);
   const [loading, setLoading] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<string>("dispatcher");
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     const fd = new FormData(e.currentTarget);
     try {
-      await inviteUser({
+      const role = String(fd.get("role") ?? "dispatcher");
+      const inviteArgs: any = {
         email: String(fd.get("email") ?? ""),
-        role: String(fd.get("role") ?? "dispatcher") as any,
+        role,
         name: String(fd.get("name") ?? "") || undefined,
-        carrierId: (String(fd.get("carrierId") ?? "") || undefined) as any,
         phone: String(fd.get("phone") ?? "") || undefined,
-      });
+      };
+      // Link carrier if selected
+      const carrierId = String(fd.get("carrierId") ?? "") || undefined;
+      if (carrierId) inviteArgs.carrierId = carrierId;
+      // Link driver if role is driver
+      if (role === "driver") {
+        const driverId = String(fd.get("driverId") ?? "") || undefined;
+        if (driverId) inviteArgs.driverId = driverId;
+      }
+      await inviteUser(inviteArgs);
       toast.success("Invitation sent");
       onOpenChange(false);
     } catch (e) {
@@ -488,7 +501,7 @@ function InviteUserDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) setSelectedRole("dispatcher"); onOpenChange(o); }}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Invite User</DialogTitle>
@@ -505,7 +518,7 @@ function InviteUserDialog({
               <TextInput name="name" placeholder="John Smith" />
             </Field>
             <Field label="Role" required>
-              <Select name="role" defaultValue="dispatcher">
+              <Select name="role" defaultValue="dispatcher" onValueChange={(v) => setSelectedRole(v)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -533,6 +546,23 @@ function InviteUserDialog({
                 </SelectContent>
               </Select>
             </Field>
+            {selectedRole === "driver" && (
+              <Field label="Driver Record">
+                <Select name="driverId">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Link to existing driver (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">None</SelectItem>
+                    {drivers.map((d: any) => (
+                      <SelectItem key={d._id} value={d._id}>
+                        {d.name}{d.email ? ` (${d.email})` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
             <Field label="Phone">
               <TextInput name="phone" type="tel" placeholder="(555) 123-4567" />
             </Field>
