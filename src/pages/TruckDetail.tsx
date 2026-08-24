@@ -79,8 +79,8 @@ export default function TruckDetail() {
       <motion.div {...fadeUp} transition={{ delay: 0.08 }} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Status" value={truck.availability} icon={<TruckIcon className="size-4" />} tone={truck.availability === "Available" ? "good" : truck.availability === "In Transit" ? "accent" : "default"} />
         <StatCard label="Type" value={truck.type ?? "Not specified"} />
-        <StatCard label="Location" value={latestLocation?.location ?? truck.currentLocation ?? "Unknown"} icon={<MapPin className="size-4" />} />
-        <StatCard label="Location Status" value={latestLocation ? (isLive ? "Live" : `Last known — ${fmtTime(latestLocation.at, tz)}`) : "Location unavailable"} icon={<Clock className="size-4" />} tone={isLive ? "good" : "warn"} />
+        <StatCard label="Location" value={latestLocation?.location ?? truck.currentLocation ?? "Not set"} icon={<MapPin className="size-4" />} />
+        <StatCard label="Location Status" value={latestLocation ? (isLive ? "Live" : `Last known — ${fmtTime(latestLocation.at, tz)}`) : truck.lat != null ? "Location set (no GPS history)" : "Location sharing not started"} icon={<Clock className="size-4" />} tone={latestLocation ? (isLive ? "good" : "warn") : "default"} />
       </motion.div>
 
       {/* Details */}

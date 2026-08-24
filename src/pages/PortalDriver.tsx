@@ -425,13 +425,18 @@ export default function PortalDriver() {
               </div>
 
               {/* Location from last update */}
-              {driverTruckLocation && (
+              {driverTruckLocation ? (
                 <div className="flex items-center gap-2 rounded-xl bg-muted/50 p-2.5 text-[11px]">
                   <MapPin className="size-3.5 text-muted-foreground" />
                   <span className="text-muted-foreground">Last known:</span>
                   <span className="font-medium">{driverTruckLocation.location ?? `${driverTruckLocation.lat.toFixed(4)}, ${driverTruckLocation.lon.toFixed(4)}`}</span>
                 </div>
-              )}
+              ) : !isTracking ? (
+                <div className="flex items-center gap-2 rounded-xl bg-muted/30 p-2.5 text-[11px]">
+                  <MapPin className="size-3.5 text-muted-foreground" />
+                  <span className="text-muted-foreground">Location sharing has not started. Tap "Start Sharing Location" above.</span>
+                </div>
+              ) : null}
 
               {/* NEXT ACTION — Premium CTA */}
               {OPERATIONAL_TRANSITIONS[activeLoad.status] && (

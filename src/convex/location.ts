@@ -144,8 +144,6 @@ export const getTruckLocations = query({
     }[] = [];
 
     for (const truck of trucks) {
-      if (truck.lat === undefined || truck.lon === undefined) continue;
-
       // Query the latest location from locationHistory (correct timestamp)
       const latestLocation = await ctx.db
         .query("locationHistory")
@@ -154,6 +152,11 @@ export const getTruckLocations = query({
         )
         .order("desc")
         .first();
+
+      // Skip trucks with no coordinates at all (neither on truck record nor in history)
+      const hasLat = (latestLocation?.lat ?? truck.lat) !== undefined;
+      const hasLon = (latestLocation?.lon ?? truck.lon) !== undefined;
+      if (!hasLat || !hasLon) continue;
 
       // Find the driver assigned to this truck
       let driverName: string | undefined;
@@ -170,14 +173,18 @@ export const getTruckLocations = query({
       // Consider "live" if updated within the last 15 minutes
       const isLive = age < 15 * 60 * 1000;
 
+      // These are guaranteed non-undefined by the guard above
+      const resolvedLat: number = (latestLocation?.lat ?? truck.lat) as number;
+      const resolvedLon: number = (latestLocation?.lon ?? truck.lon) as number;
+
       results.push({
         truckId: truck._id,
         unitNumber: truck.unitNumber,
         type: truck.type,
         carrierId: truck.carrierId,
         availability: truck.availability,
-        lat: latestLocation?.lat ?? truck.lat,
-        lon: latestLocation?.lon ?? truck.lon,
+        lat: resolvedLat,
+        lon: resolvedLon,
         location: latestLocation?.location ?? truck.currentLocation,
         locationSource: latestLocation?.source,
         locationAccuracy: latestLocation?.accuracy,
@@ -233,14 +240,7 @@ export const updateTruckLocation = mutation({
       }
     }
 
-    // Update truck's current location
-    await ctx.db.patch(args.truckId, {
-      lat: args.lat,
-      lon: args.lon,
-      currentLocation: args.location,
-    });
-
-    // Update tracking fields on truck
+    // Update truck's current location and tracking fields in a single patch
     await ctx.db.patch(args.truckId, {
       lat: args.lat,
       lon: args.lon,
