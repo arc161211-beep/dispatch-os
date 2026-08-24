@@ -65,7 +65,7 @@ export default function PortalDriver() {
 
   // GPS tracking state
   const [isTracking, setIsTracking] = useState(false);
-  const [gpsPermission, setGpsPermission] = useState<PermissionState | "unknown">("unknown");
+  const [gpsPermission, setGpsPermission] = useState<PermissionState | "unknown" | "unavailable">("unknown");
   const [lastUpdateAt, setLastUpdateAt] = useState<number | null>(null);
   const [accuracy, setAccuracy] = useState<number | null>(null);
   const [speed, setSpeed] = useState<number | null>(null);

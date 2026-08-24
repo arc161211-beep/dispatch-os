@@ -1,13 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useParams } from "react-router";
 import { useQuery } from "convex/react";
 import { motion } from "framer-motion";
 import { api } from "@/convex/_generated/api";
 import { Logo } from "@/components/brand/Logo";
 import { fmtDate, fmtRelative } from "@/lib/dates";
-import { MapPin, Truck, Package, Clock, Navigation, Radio, AlertTriangle } from "lucide-react";
-
-// ---------------------------------------------------------------------------
+import { MapPin, Radio, AlertTriangle } from "lucide-react";
 
 // Leaflet lazy-load
 let L: typeof import("leaflet") | null = null;
@@ -27,7 +25,27 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#039;");
 }
 
-// ---------------------------------------------------------------------------
+function cn(...classes: (string | boolean | undefined | null)[]) {
+  return classes.filter(Boolean).join(" ");
+}
+
+function StatusBadge({ status }: { status: string | null | undefined }) {
+  if (!status) return null;
+  const colorMap: Record<string, string> = {
+    "Booked": "text-[#4F8CFF] bg-[#4F8CFF]/10",
+    "In Transit": "text-[#4F8CFF] bg-[#4F8CFF]/10",
+    "Delivered": "text-[#22C55E] bg-[#22C55E]/10",
+    "Completed": "text-[#22C55E] bg-[#22C55E]/10",
+    "At Pickup": "text-[#F5A623] bg-[#F5A623]/10",
+    "At Delivery": "text-[#F5A623] bg-[#F5A623]/10",
+    "Cancelled": "text-[#EF4444] bg-[#EF4444]/10",
+  };
+  return (
+    <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold", colorMap[status] ?? "text-muted-foreground bg-muted")}>
+      {status}
+    </span>
+  );
+}
 
 export default function TrackingPage() {
   const { token } = useParams<{ token: string }>();
@@ -35,27 +53,31 @@ export default function TrackingPage() {
     api.location.getPublicTracking,
     token ? { token } : "skip",
   );
-  const mapRef = useState<HTMLDivElement | null>(null);
-  const mapInstanceRef = useState<import("leaflet").Map | null>(null);
-  const markerRef = useState<import("leaflet").Marker | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<import("leaflet").Map | null>(null);
+  const markerRef = useRef<import("leaflet").Marker | null>(null);
 
-  // Initialize map when location data is available
+  // Initialize and update map when location data is available
   useEffect(() => {
-    if (!tracking?.valid || !tracking.location || !mapRef[0]) return;
+    if (!tracking?.valid || !tracking.location || !mapContainerRef.current) return;
+
+    const loc = tracking.location;
+    const loadName = tracking.load?.loadNumber ?? "";
 
     let cancelled = false;
 
     (async () => {
       const leaflet = await loadLeaflet();
-      if (cancelled || !mapRef[0]) return;
+      if (cancelled || !mapContainerRef.current) return;
 
       // Clean up old map
-      if (mapInstanceRef[1]) {
-        mapInstanceRef[1].remove();
-        mapInstanceRef[1](null);
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
       }
+      markerRef.current = null;
 
-      const map = leaflet.map(mapRef[0], {
+      const map = leaflet.map(mapContainerRef.current, {
         zoomControl: true,
         attributionControl: true,
         scrollWheelZoom: false,
@@ -69,10 +91,8 @@ export default function TrackingPage() {
         })
         .addTo(map);
 
-      const loc = tracking.location;
       const isLive = loc.isLive;
 
-      // Truck marker icon
       const icon = leaflet.divIcon({
         className: "",
         html: `<div style="width:36px;height:36px;border-radius:50%;background:${isLive ? "#22C55E" : "#f59e0b"};border:3px solid white;box-shadow:0 3px 10px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center">
@@ -85,7 +105,7 @@ export default function TrackingPage() {
       const marker = leaflet.marker([loc.lat, loc.lon], { icon }).addTo(map);
       marker.bindPopup(`
         <div style="min-width:160px;font-family:system-ui,sans-serif">
-          <div style="font-weight:700;font-size:13px;margin-bottom:4px">${escapeHtml(tracking.load.loadNumber)}</div>
+          <div style="font-weight:700;font-size:13px;margin-bottom:4px">${escapeHtml(loadName)}</div>
           <div style="font-size:11px;color:#6b7280">
             ${isLive ? "🟢 Live" : "🟡 Last known"} · ${fmtRelative(loc.at)}
           </div>
@@ -93,29 +113,21 @@ export default function TrackingPage() {
         </div>
       `).openPopup();
 
-      const bounds = leaflet.latLngBounds([loc.lat, loc.lon]);
-      map.fitBounds(bounds.pad(0.3));
-      mapInstanceRef[1](map);
-      markerRef[1](marker);
+      map.fitBounds(leaflet.latLngBounds([loc.lat, loc.lon]).pad(0.3));
+      mapInstanceRef.current = map;
+      markerRef.current = marker;
 
       setTimeout(() => map.invalidateSize(), 100);
     })();
 
     return () => {
       cancelled = true;
-      if (mapInstanceRef[1]) {
-        mapInstanceRef[1].remove();
-        mapInstanceRef[1](null);
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
       }
     };
-  }, [tracking?.valid, tracking?.location?.lat, tracking?.location?.lon, mapRef[0]]);
-
-  // Update marker position reactively
-  useEffect(() => {
-    if (!tracking?.valid || !tracking.location || !markerRef[0] || !mapInstanceRef[0]) return;
-    const loc = tracking.location;
-    markerRef[0].setLatLng([loc.lat, loc.lon]);
-  }, [tracking?.location?.lat, tracking?.location?.lon]);
+  }, [tracking?.valid, tracking?.location?.lat, tracking?.location?.lon]);
 
   // Loading state
   if (tracking === undefined) {
@@ -169,7 +181,7 @@ export default function TrackingPage() {
         {/* Map */}
         <div className="flex-1 min-h-[50vh] lg:min-h-0">
           {loc ? (
-            <div ref={mapRef[1]} className="w-full h-full min-h-[50vh]" />
+            <div ref={mapContainerRef} className="w-full h-full min-h-[50vh]" />
           ) : (
             <div className="w-full h-full min-h-[50vh] flex flex-col items-center justify-center bg-muted/10">
               <Radio className="size-8 text-muted-foreground/40 mb-2" />
@@ -189,8 +201,8 @@ export default function TrackingPage() {
           {/* Load info */}
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground mb-2">Load Information</p>
-            <h2 className="text-lg font-bold">{load.loadNumber}</h2>
-            <StatusBadge status={load.status} />
+            <h2 className="text-lg font-bold">{load?.loadNumber ?? "—"}</h2>
+            <StatusBadge status={load?.status} />
           </div>
 
           {/* Route */}
@@ -201,8 +213,8 @@ export default function TrackingPage() {
               </div>
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Pickup</p>
-                <p className="text-sm font-semibold">{load.origin ?? "TBD"}</p>
-                {load.pickupDate && <p className="text-xs text-muted-foreground">{fmtDate(load.pickupDate)}</p>}
+                <p className="text-sm font-semibold">{load?.origin ?? "TBD"}</p>
+                {load?.pickupDate && <p className="text-xs text-muted-foreground">{fmtDate(load.pickupDate)}</p>}
               </div>
             </div>
             <div className="ml-3.5 border-l-2 border-dashed border-border/40 h-3" />
@@ -212,8 +224,8 @@ export default function TrackingPage() {
               </div>
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Delivery</p>
-                <p className="text-sm font-semibold">{load.destination ?? "TBD"}</p>
-                {load.deliveryDate && <p className="text-xs text-muted-foreground">{fmtDate(load.deliveryDate)}</p>}
+                <p className="text-sm font-semibold">{load?.destination ?? "TBD"}</p>
+                {load?.deliveryDate && <p className="text-xs text-muted-foreground">{fmtDate(load.deliveryDate)}</p>}
               </div>
             </div>
           </div>
@@ -257,28 +269,4 @@ export default function TrackingPage() {
       </div>
     </div>
   );
-}
-
-// StatusBadge inline for the public page (no shared deps)
-function StatusBadge({ status }: { status: string | null | undefined }) {
-  if (!status) return null;
-  const colorMap: Record<string, string> = {
-    "Booked": "text-[#4F8CFF] bg-[#4F8CFF]/10",
-    "In Transit": "text-[#4F8CFF] bg-[#4F8CFF]/10",
-    "Delivered": "text-[#22C55E] bg-[#22C55E]/10",
-    "Completed": "text-[#22C55E] bg-[#22C55E]/10",
-    "At Pickup": "text-[#F5A623] bg-[#F5A623]/10",
-    "At Delivery": "text-[#F5A623] bg-[#F5A623]/10",
-    "Cancelled": "text-[#EF4444] bg-[#EF4444]/10",
-  };
-  return (
-    <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold", colorMap[status] ?? "text-muted-foreground bg-muted")}>
-      {status}
-    </span>
-  );
-}
-
-// cn utility
-function cn(...classes: (string | boolean | undefined | null)[]) {
-  return classes.filter(Boolean).join(" ");
 }
