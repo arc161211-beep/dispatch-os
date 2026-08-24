@@ -194,6 +194,11 @@ const schema = defineSchema(
       maxWeight: v.optional(v.number()),
       notes: v.optional(v.string()),
       demo: v.optional(v.boolean()),
+      // Live GPS tracking fields
+      trackingActive: v.optional(v.boolean()),
+      lastLocationUpdateAt: v.optional(v.number()),
+      speed: v.optional(v.number()),
+      heading: v.optional(v.number()),
     })
       .index("by_org", ["orgId"])
       .index("by_org_status", ["orgId", "availability"])
@@ -554,11 +559,27 @@ const schema = defineSchema(
       location: v.optional(v.string()),
       source: v.optional(v.union(v.literal("driver_mobile"), v.literal("browser_geolocation"), v.literal("gps_telematics"), v.literal("manual"), v.literal("other"))),
       accuracy: v.optional(v.number()),
+      speed: v.optional(v.number()),
+      heading: v.optional(v.number()),
       at: v.number(),
     })
       .index("by_org", ["orgId"])
       .index("by_org_entity", ["orgId", "entityType", "entityId"])
       .index("by_org_entity_at", ["orgId", "entityType", "entityId", "at"]),
+
+    trackingTokens: defineTable({
+      orgId,
+      loadId: v.id("loads"),
+      truckId: v.optional(v.id("trucks")),
+      token: v.string(),
+      active: v.boolean(),
+      createdBy: userId,
+      createdAt: v.number(),
+      revokedAt: v.optional(v.number()),
+    })
+      .index("by_org", ["orgId"])
+      .index("by_org_load", ["orgId", "loadId"])
+      .index("by_token", ["token"]),
 
     userNotificationPrefs: defineTable({
       orgId,

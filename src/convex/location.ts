@@ -138,6 +138,9 @@ export const getTruckLocations = query({
       at: number;
       driverName?: string;
       isLive: boolean;
+      trackingActive: boolean;
+      speed: number | undefined;
+      heading: number | undefined;
     }[] = [];
 
     for (const truck of trucks) {
@@ -181,6 +184,9 @@ export const getTruckLocations = query({
         at: locationTime,
         driverName,
         isLive,
+        trackingActive: truck.trackingActive ?? false,
+        speed: latestLocation?.speed ?? truck.speed,
+        heading: latestLocation?.heading ?? truck.heading,
       });
     }
 
@@ -203,6 +209,8 @@ export const updateTruckLocation = mutation({
       v.union(...LOCATION_SOURCES.map((s) => v.literal(s))),
     ),
     accuracy: v.optional(v.number()),
+    speed: v.optional(v.number()),
+    heading: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     // Validate coordinates are within valid range
@@ -232,6 +240,17 @@ export const updateTruckLocation = mutation({
       currentLocation: args.location,
     });
 
+    // Update tracking fields on truck
+    await ctx.db.patch(args.truckId, {
+      lat: args.lat,
+      lon: args.lon,
+      currentLocation: args.location,
+      trackingActive: true,
+      lastLocationUpdateAt: Date.now(),
+      speed: args.speed,
+      heading: args.heading,
+    });
+
     // Record in location history
     await ctx.db.insert("locationHistory", {
       orgId: s.orgId as never,
@@ -242,6 +261,8 @@ export const updateTruckLocation = mutation({
       location: args.location,
       source: args.source,
       accuracy: args.accuracy,
+      speed: args.speed,
+      heading: args.heading,
       at: Date.now(),
     });
 
@@ -397,5 +418,239 @@ export const cleanupOldLocations = mutation({
     }
 
     return { deleted, message: `Deleted ${deleted} records older than ${days} days.` };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Live GPS Tracking — Start / Stop
+// ---------------------------------------------------------------------------
+
+/** Start live GPS tracking for a truck. */
+export const startTracking = mutation({
+  args: { truckId: v.id("trucks") },
+  handler: async (ctx, args) => {
+    const s = await requireOrg(ctx);
+    const truck = await ctx.db.get(args.truckId);
+    if (!truck || truck.orgId !== s.orgId) throw new ConvexError("Truck not found.");
+
+    // Drivers can only track their own assigned truck
+    if (s.role === "driver") {
+      if (!s.driverId) throw new ConvexError("No driver profile found.");
+      const driver = await ctx.db.get(s.driverId);
+      if (!driver || !("truckId" in driver) || driver.truckId !== args.truckId) {
+        throw new ConvexError("You can only track your assigned truck.");
+      }
+    } else if (s.role === "carrier_admin") {
+      if (!s.carrierId || truck.carrierId !== s.carrierId) {
+        throw new ConvexError("You can only track trucks in your carrier.");
+      }
+    }
+
+    await ctx.db.patch(args.truckId, { trackingActive: true });
+
+    await audit(ctx, s, {
+      action: "tracking.started",
+      entity: "truck",
+      entityId: args.truckId,
+      metadata: { unitNumber: truck.unitNumber },
+    });
+
+    return { ok: true };
+  },
+});
+
+/** Stop live GPS tracking for a truck. */
+export const stopTracking = mutation({
+  args: { truckId: v.id("trucks") },
+  handler: async (ctx, args) => {
+    const s = await requireOrg(ctx);
+    const truck = await ctx.db.get(args.truckId);
+    if (!truck || truck.orgId !== s.orgId) throw new ConvexError("Truck not found.");
+
+    // Drivers can only stop tracking on their own assigned truck
+    if (s.role === "driver") {
+      if (!s.driverId) throw new ConvexError("No driver profile found.");
+      const driver = await ctx.db.get(s.driverId);
+      if (!driver || !("truckId" in driver) || driver.truckId !== args.truckId) {
+        throw new ConvexError("You can only stop tracking on your assigned truck.");
+      }
+    } else if (s.role === "carrier_admin") {
+      if (!s.carrierId || truck.carrierId !== s.carrierId) {
+        throw new ConvexError("You can only stop tracking on trucks in your carrier.");
+      }
+    }
+
+    await ctx.db.patch(args.truckId, { trackingActive: false });
+
+    await audit(ctx, s, {
+      action: "tracking.stopped",
+      entity: "truck",
+      entityId: args.truckId,
+      metadata: { unitNumber: truck.unitNumber },
+    });
+
+    return { ok: true };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Secure Public Tracking
+// ---------------------------------------------------------------------------
+
+/** Generate a tracking token for a load (dispatcher only). */
+export const generateTrackingToken = mutation({
+  args: { loadId: v.id("loads") },
+  handler: async (ctx, args) => {
+    const s = await requireWrite(ctx);
+    const load = await ctx.db.get(args.loadId);
+    if (!load || load.orgId !== s.orgId) throw new ConvexError("Load not found.");
+
+    // Check for existing active token
+    const existing = await ctx.db
+      .query("trackingTokens")
+      .withIndex("by_org_load", (q) =>
+        q.eq("orgId", s.orgId).eq("loadId", args.loadId),
+      )
+      .filter((q) => q.eq(q.field("active"), true))
+      .first();
+
+    if (existing) {
+      return { token: existing.token, alreadyExisted: true };
+    }
+
+    // Generate random token
+    const token = Array.from(crypto.getRandomValues(new Uint8Array(32)))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+
+    const tokenId = await ctx.db.insert("trackingTokens", {
+      orgId: s.orgId as never,
+      loadId: args.loadId,
+      truckId: load.truckId as Id<"trucks"> | undefined,
+      token,
+      active: true,
+      createdBy: s.userId as never,
+      createdAt: Date.now(),
+    });
+
+    await audit(ctx, s, {
+      action: "tracking.token_generated",
+      entity: "trackingToken",
+      entityId: tokenId,
+      metadata: { loadId: args.loadId, loadNumber: load.loadNumber },
+    });
+
+    return { token, alreadyExisted: false };
+  },
+});
+
+/** Revoke a tracking token. */
+export const revokeTrackingToken = mutation({
+  args: { tokenId: v.id("trackingTokens") },
+  handler: async (ctx, args) => {
+    const s = await requireWrite(ctx);
+    const trackingToken = await ctx.db.get(args.tokenId);
+    if (!trackingToken || trackingToken.orgId !== s.orgId) throw new ConvexError("Tracking token not found.");
+
+    await ctx.db.patch(args.tokenId, { active: false, revokedAt: Date.now() });
+
+    await audit(ctx, s, {
+      action: "tracking.token_revoked",
+      entity: "trackingToken",
+      entityId: args.tokenId,
+      metadata: { loadId: trackingToken.loadId },
+    });
+
+    return { ok: true };
+  },
+});
+
+/** Get tracking tokens for an organization's load. */
+export const getTrackingTokens = query({
+  args: { loadId: v.id("loads") },
+  handler: async (ctx, args) => {
+    const s = await requireOrg(ctx);
+    const load = await ctx.db.get(args.loadId);
+    if (!load || load.orgId !== s.orgId) throw new ConvexError("Load not found.");
+
+    const tokens = await ctx.db
+      .query("trackingTokens")
+      .withIndex("by_org_load", (q) =>
+        q.eq("orgId", s.orgId).eq("loadId", args.loadId),
+      )
+      .order("desc")
+      .collect();
+
+    return tokens;
+  },
+});
+
+/** Public tracking query — no auth required. Returns location data for a tracking token. */
+export const getPublicTracking = query({
+  args: { token: v.string() },
+  handler: async (ctx, args) => {
+    // Find the tracking token
+    const trackingToken = await ctx.db
+      .query("trackingTokens")
+      .withIndex("by_token", (q) => q.eq("token", args.token))
+      .first();
+
+    if (!trackingToken || !trackingToken.active) {
+      return { valid: false, error: "Tracking link is not active or does not exist." };
+    }
+
+    // Load the associated load
+    const load = await ctx.db.get(trackingToken.loadId);
+    if (!load) {
+      return { valid: false, error: "Load not found." };
+    }
+
+    // Get latest truck location
+    let latestLocation: any = null;
+    if (trackingToken.truckId) {
+      const truck = await ctx.db.get(trackingToken.truckId);
+      if (truck && truck.lat !== undefined && truck.lon !== undefined) {
+        // Query the latest location from locationHistory
+        const loc = await ctx.db
+          .query("locationHistory")
+          .withIndex("by_org_entity", (q) =>
+            q.eq("orgId", trackingToken.orgId)
+              .eq("entityType", "truck")
+              .eq("entityId", trackingToken.truckId!),
+          )
+          .order("desc")
+          .first();
+
+        const locationTime = loc?.at ?? truck._creationTime;
+        const age = Date.now() - locationTime;
+        const trackingAge = Date.now() - (trackingToken.createdAt);
+
+        // Consider live if location updated within 15 min AND tracking started within 24 hours
+        const isLive = age < 15 * 60 * 1000 && trackingAge < 24 * 60 * 60 * 1000;
+
+        latestLocation = {
+          lat: loc?.lat ?? truck.lat,
+          lon: loc?.lon ?? truck.lon,
+          at: locationTime,
+          isLive,
+          speed: loc?.speed ?? truck.speed,
+          accuracy: loc?.accuracy,
+        };
+      }
+    }
+
+    return {
+      valid: true,
+      load: {
+        loadNumber: load.loadNumber,
+        origin: load.origin,
+        destination: load.destination,
+        pickupDate: load.pickupDate,
+        deliveryDate: load.deliveryDate,
+        status: load.status,
+      },
+      location: latestLocation,
+      trackingActive: trackingToken.active,
+    };
   },
 });

@@ -48,6 +48,8 @@ export interface TruckMarker {
   at: number;
   source?: string;
   accuracy?: number;
+  speed?: number;
+  trackingActive?: boolean;
 }
 
 export interface TruckMapProps {
@@ -104,28 +106,26 @@ export function TruckMap({ trucks, height = "h-80", className, emptyState, onTru
 
       for (const truck of validTrucks) {
         const age = Date.now() - truck.at;
-        const isLive = age < 15 * 60 * 1000; // 15 min
-        const icon = isLive
-          ? leaflet.divIcon({
-              className: "",
-              html: `<div style="width:28px;height:28px;border-radius:50%;background:#16a34a;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 18H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3.19M15 6h2.81A2 2 0 0 1 20 8v8a2 2 0 0 1-2 2h-2"/><line x1="23" y1="13" x2="23" y2="11"/><polyline points="11 6 7 12 13 12 9 18"/></svg>
-              </div>`,
-              iconSize: [28, 28],
-              iconAnchor: [14, 14],
-            })
-          : leaflet.divIcon({
-              className: "",
-              html: `<div style="width:28px;height:28px;border-radius:50%;background:#f59e0b;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-              </div>`,
-              iconSize: [28, 28],
-              iconAnchor: [14, 14],
-            });
+        const LIVE_THRESHOLD = 15 * 60 * 1000; // 15 min
+        const STALE_THRESHOLD = 60 * 60 * 1000; // 1 hour
+        const isLive = age < LIVE_THRESHOLD;
+        const isStale = age >= LIVE_THRESHOLD && age < STALE_THRESHOLD;
+        const isStopped = !truck.trackingActive && age >= LIVE_THRESHOLD;
+        
+        // Icon color: green=live, yellow=stale, gray=stopped
+        const markerColor = isLive ? "#16a34a" : isStale ? "#f59e0b" : "#6b7280";
+        const icon = leaflet.divIcon({
+          className: "",
+          html: `<div style="width:28px;height:28px;border-radius:50%;background:${markerColor};border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 18H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3.19M15 6h2.81A2 2 0 0 1 20 8v8a2 2 0 0 1-2 2h-2"/><line x1="23" y1="13" x2="23" y2="11"/><polyline points="11 6 7 12 13 12 9 18"/></svg>
+          </div>`,
+          iconSize: [28, 28],
+          iconAnchor: [14, 14],
+        });
 
         const marker = leaflet.marker([truck.lat, truck.lon], { icon }).addTo(map);
 
-        const statusLabel = truck.availability ?? "Unknown";
+        const statusLabel = isLive ? "Live" : isStale ? "Stale" : isStopped ? "Stopped" : (truck.availability ?? "Unknown");
         const locationLabel = truck.location ?? `${truck.lat.toFixed(4)}, ${truck.lon.toFixed(4)}`;
         const timeLabel = isLive ? "Live" : `Last known — ${fmtDateTime(truck.at)}`;
         const sourceLabel = truck.source ? ` · ${truck.source.replace("_", " ")}` : "";
