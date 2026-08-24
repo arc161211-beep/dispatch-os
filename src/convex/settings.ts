@@ -131,4 +131,20 @@ export const updateUserNotificationPrefs = mutation({
   },
 });
 
+// ---------------------------------------------------------------------------
+// Integration status — safe boolean check of server-side env vars only.
+// Never exposes secret values to the client.
+// ---------------------------------------------------------------------------
+
+export const integrationStatus = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireOrg(ctx);
+    return {
+      aiConfigured: !!process.env.NVIDIA_API_KEY,
+      emailConfigured: !!process.env.RESEND_API_KEY,
+    };
+  },
+});
+
 export type { FeeType };

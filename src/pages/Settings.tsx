@@ -127,6 +127,7 @@ export default function SettingsPage() {
 
 function AdminSections({ settings }: { settings: any }) {
   const updateSettings = useMutation(api.settings.update);
+  const integrationStatus = useQuery(api.settings.integrationStatus);
   const [busy, setBusy] = useState(false);
 
   const handleVisibilitySave = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -213,8 +214,8 @@ function AdminSections({ settings }: { settings: any }) {
       <SectionCard title="External Integrations" description="Configure third-party services. All show 'Not Configured' until set up.">
         <div className="space-y-2">
           {[
-            { name: "AI (NVIDIA Nemotron)", status: process.env.NVIDIA_API_KEY ? "Configured" : "Not Configured", note: "Powers the AI assistant, message classification, and daily summaries" },
-            { name: "Email (OTP / Notifications)", status: process.env.RESEND_API_KEY ? "Configured" : "Not Configured", note: "Sends OTP codes via Resend" },
+            { name: "AI (NVIDIA Nemotron)", status: integrationStatus?.aiConfigured ? "Configured" : "Not Configured", note: "Powers the AI assistant, message classification, and daily summaries" },
+            { name: "Email (OTP / Notifications)", status: integrationStatus?.emailConfigured ? "Configured" : "Not Configured", note: "Sends OTP codes via Resend" },
             { name: "SMS / WhatsApp", status: "Not Configured", note: "Requires external integration — set up in Integrations page" },
             { name: "Maps & Routing", status: "Not Configured", note: "Currently using OpenStreetMap (free). Premium routing requires API key" },
             { name: "Load Board", status: "Not Configured", note: "Requires external integration — set up in Integrations page" },
