@@ -38,6 +38,9 @@ export const getCurrentUser = async (ctx: QueryCtx) => {
  * SECURITY: Only allows provisioning if:
  * 1. User has a matching pending invite (not expired/revoked), OR
  * 2. This is genuinely a brand-new workspace (no other users exist yet)
+ *
+ * Returns role + driverId so the client can redirect immediately
+ * without waiting for the reactive query to re-fetch.
  */
 export const provision = mutation({
   args: {},
@@ -50,7 +53,11 @@ export const provision = mutation({
     if (user.orgId) {
       // Stamp last login time for admin visibility.
       await ctx.db.patch(userId, { lastLoginAt: Date.now() });
-      return { status: "ready" as const };
+      return {
+        status: "ready" as const,
+        role: (user.role ?? "admin") as Role,
+        driverId: user.driverId ?? undefined,
+      };
     }
 
     // Rate limit: prevent repeated provisioning attempts
@@ -95,7 +102,12 @@ export const provision = mutation({
           entityId: userId,
           metadata: { email, role: pending.role, carrierId: pending.carrierId },
         });
-        return { status: "ready" as const, inviteAccepted: true };
+        return {
+          status: "ready" as const,
+          inviteAccepted: true,
+          role: pending.role as Role,
+          driverId: pending.driverId ?? undefined,
+        };
       }
     }
 
@@ -151,7 +163,92 @@ export const provision = mutation({
       metadata: { email, role: "admin" },
     });
 
-    return { status: "created" as const };
+    return { status: "created" as const, role: "admin" as Role };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Diagnostic & repair utilities
+// ---------------------------------------------------------------------------
+
+/**
+ * Diagnostic: get user + invitation state for a given email.
+ * Admin-only — used to debug provisioning issues.
+ */
+export const getUserDiagnostic = query({
+  args: { email: v.string() },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const email = args.email.toLowerCase().trim();
+
+    const allUsers = await ctx.db.query("users").collect();
+    const matchingUsers = allUsers
+      .filter((u) => u.email?.toLowerCase().trim() === email)
+      .map((u) => ({
+        _id: u._id,
+        name: u.name ?? "",
+        email: u.email ?? "",
+        role: u.role ?? null,
+        orgId: u.orgId ?? null,
+        driverId: u.driverId ?? null,
+        carrierId: u.carrierId ?? null,
+        accountStatus: u.accountStatus ?? null,
+        lastLoginAt: u.lastLoginAt ?? 0,
+        createdAt: u._creationTime,
+      }));
+
+    const allPending = await ctx.db.query("pendingUsers").collect();
+    const matchingPending = allPending
+      .filter((p) => p.email.toLowerCase().trim() === email)
+      .map((p) => ({
+        _id: p._id,
+        email: p.email,
+        role: p.role,
+        orgId: p.orgId,
+        driverId: p.driverId ?? null,
+        carrierId: p.carrierId ?? null,
+        status: p.status,
+        createdAt: p.createdAt,
+        expiresAt: p.expiresAt,
+        isExpired: p.expiresAt < Date.now(),
+      }));
+
+    return { users: matchingUsers, invitations: matchingPending };
+  },
+});
+
+/**
+ * Admin: fix a user's role, driverId, or other fields.
+ * Only for correcting stale/inconsistent state.
+ */
+export const fixUserState = mutation({
+  args: {
+    userId: v.id("users"),
+    role: v.optional(v.union(...ROLES.map((r) => v.literal(r)))),
+    driverId: v.optional(v.union(v.id("drivers"), v.null())),
+    carrierId: v.optional(v.union(v.id("carriers"), v.null())),
+  },
+  handler: async (ctx, args) => {
+    const s = await requireAdmin(ctx);
+    const target = await ctx.db.get(args.userId);
+    if (!target || target.orgId !== s.orgId) throw new ConvexError("User not found in this workspace.");
+
+    const patch: Record<string, unknown> = {};
+    if (args.role !== undefined) patch.role = args.role;
+    if (args.driverId !== undefined) patch.driverId = args.driverId;
+    if (args.carrierId !== undefined) patch.carrierId = args.carrierId;
+
+    if (Object.keys(patch).length > 0) {
+      await ctx.db.patch(args.userId, patch as never);
+      await audit(ctx, s, {
+        action: "user.state.fixed",
+        entity: "user",
+        entityId: args.userId,
+        metadata: { fields: Object.keys(patch), email: target.email },
+      });
+    }
+
+    return { ok: true };
   },
 });
 

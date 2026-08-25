@@ -32,36 +32,58 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   /**
    * After authentication, wait for provisioning, then resolve the
    * fresh role from the database and redirect accordingly.
+   *
+   * Uses the role returned directly from the provision mutation
+   * to avoid waiting for the reactive Convex query to update.
    */
   const handlePostAuthRedirect = useCallback(async () => {
     if (!isAuthenticated || redirecting) return;
 
-    // If user has no orgId yet, trigger provisioning and wait
+    let resolvedRole: Role | undefined;
+
+    // If user has no orgId yet, trigger provisioning and use returned role
     if (!user?.orgId) {
       try {
-        await provision();
-        // user object will update reactively after provision patch
+        const result = await provision();
+        // provision() returns { role, driverId, ... } — use it immediately
+        if (result?.role) {
+          resolvedRole = result.role as Role;
+        }
       } catch {
         // Provisioning failed — the AppInit component will show the error
         return;
       }
     }
 
-    // Only redirect once we have a fresh role from the DB
-    // The user object updates reactively via Convex, so once orgId
-    // exists and role is set, proceed.
-    if (user?.role) {
+    // Use the role from provisioning if available, otherwise from reactive user
+    const effectiveRole = resolvedRole ?? (user?.role as Role | undefined);
+
+    if (effectiveRole) {
       setRedirecting(true);
-      const dest = resolveLoginDestination(user.role as Role, returnTo);
+      const dest = resolveLoginDestination(effectiveRole, returnTo);
       navigate(dest, { replace: true });
     }
   }, [isAuthenticated, user, provision, returnTo, navigate, redirecting]);
 
+  // Primary effect: redirect when authenticated and role is available
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
       handlePostAuthRedirect();
     }
   }, [authLoading, isAuthenticated, handlePostAuthRedirect]);
+
+  // Safety net: if role is still not available after provisioning,
+  // poll the reactive user object for up to 5 seconds.
+  // This handles the rare case where the Convex reactive query
+   // hasn't updated yet after provisioning completed.
+  useEffect(() => {
+    if (redirecting || !isAuthenticated || authLoading) return;
+    if (user?.role) return; // already have the role
+    const timer = setTimeout(() => {
+      handlePostAuthRedirect();
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [user, isAuthenticated, authLoading, redirecting, handlePostAuthRedirect]);
 
   const handleEmailSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
