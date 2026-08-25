@@ -88,19 +88,43 @@ export const emailOtp = Email({
 </html>`;
 
     try {
-      const { error } = await resend.emails.send({
+      const result = await resend.emails.send({
         from: fromEmail,
         to: email,
         subject: "Your DispatchOS verification code",
         html: htmlContent,
       });
 
-      if (error) {
-        // SECURITY: Log only safe diagnostic info — never the API key or OTP.
-        console.error("[emailOtp] Resend API error:", {
-          status: error.statusCode,
-          message: error.message,
+      if (result.error) {
+        const statusCode = result.error.statusCode ?? 0;
+        const msg = result.error.message ?? "Unknown Resend error";
+
+        // Classify the error for server-side diagnostics
+        let category: string;
+        if (statusCode === 401 || statusCode === 403) {
+          category = "RESEND_API_KEY_INVALID_OR_UNAUTHORIZED";
+        } else if (statusCode === 422 && msg.toLowerCase().includes("from")) {
+          category = "SENDER_ADDRESS_NOT_VERIFIED";
+        } else if (statusCode === 422 && msg.toLowerCase().includes("recipient")) {
+          category = "RECIPIENT_RESTRICTED_BY_RESEND_PLAN";
+        } else if (statusCode === 429) {
+          category = "RESEND_RATE_LIMITED";
+        } else if (statusCode >= 500) {
+          category = "RESEND_SERVER_ERROR";
+        } else {
+          category = "RESEND_API_ERROR";
+        }
+
+        // SECURITY: Log category + safe metadata — never the API key or OTP.
+        console.error(`[emailOtp] ${category}:`, {
+          recipientDomain: email.split("@")[1] ?? "unknown",
+          fromAddress: fromEmail,
+          statusCode,
+          resendMessage: msg,
+          resendId: null, // data is null when error is present
         });
+
+        // SECURITY: Never expose Resend error details to the client.
         throw new Error(
           "Unable to send your verification code. Please try again or contact your administrator.",
         );
@@ -115,7 +139,16 @@ export const emailOtp = Email({
       ) {
         throw error;
       }
-      console.error("[emailOtp] Failed to send verification code:", error);
+      // Classify unexpected errors (network, missing API key, etc.)
+      const errStr = String(error);
+      let category = "EMAIL_PROVIDER_UNKNOWN_ERROR";
+      if (errStr.includes("Missing") && errStr.includes("RESEND_API_KEY")) {
+        category = "RESEND_API_KEY_MISSING";
+      } else if (errStr.includes("fetch") || errStr.includes("network")) {
+        category = "EMAIL_PROVIDER_NETWORK_ERROR";
+      }
+
+      console.error(`[emailOtp] ${category}:`, error);
       throw new Error(
         "Unable to send your verification code. Please try again or contact your administrator.",
       );
