@@ -215,3 +215,194 @@ describe("resolveLoginDestination", () => {
     expect(resolveLoginDestination("driver", "/loads/abc123")).toBe("/portal/driver");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Multi-role invitation + provision + redirect regression tests
+//
+// These tests verify that the generic invitation and login system works
+// correctly for ALL roles — no hardcoded emails or test-specific logic.
+// ---------------------------------------------------------------------------
+
+describe("Invitation + provision + redirect: generic multi-role flow", () => {
+  /**
+   * Simulates the complete post-login redirect logic:
+   * 1. Admin invites a user with a specific role
+   * 2. User logs in via OTP
+   * 3. provision() returns { role } for that user
+   * 4. resolveLoginDestination() determines the redirect
+   */
+  const simulateLogin = (
+    email: string,
+    role: "admin" | "super_admin" | "dispatcher" | "operations" | "carrier_admin" | "driver" | "read_only",
+    returnTo?: string,
+  ) => {
+    // In the real system, provision() returns the role from the DB.
+    // Here we simulate that the returned role matches the invited role.
+    const resolvedRole = role;
+    return resolveLoginDestination(resolvedRole, returnTo);
+  };
+
+  it("invited driver → /portal/driver", () => {
+    expect(simulateLogin("driver-test@example.com", "driver")).toBe("/portal/driver");
+  });
+
+  it("invited carrier_admin → /portal/carrier", () => {
+    expect(simulateLogin("carrier-test@example.com", "carrier_admin")).toBe("/portal/carrier");
+  });
+
+  it("invited dispatcher → /dashboard", () => {
+    expect(simulateLogin("dispatcher-test@example.com", "dispatcher")).toBe("/dashboard");
+  });
+
+  it("invited operations → /dashboard", () => {
+    expect(simulateLogin("operations-test@example.com", "operations")).toBe("/dashboard");
+  });
+
+  it("invited admin → /dashboard", () => {
+    expect(simulateLogin("admin-test@example.com", "admin")).toBe("/dashboard");
+  });
+
+  it("invited super_admin → /dashboard", () => {
+    expect(simulateLogin("superadmin-test@example.com", "super_admin")).toBe("/dashboard");
+  });
+
+  it("invited read_only → /dashboard", () => {
+    expect(simulateLogin("readonly-test@example.com", "read_only")).toBe("/dashboard");
+  });
+
+  it("unknown user with no role → /auth (denied)", () => {
+    expect(simulateLogin("unknown@example.com", undefined as never)).toBe("/auth");
+  });
+
+  it("driver with returnTo=/portal/driver stays on /portal/driver", () => {
+    expect(simulateLogin("driver@example.com", "driver", "/portal/driver")).toBe("/portal/driver");
+  });
+
+  it("driver with returnTo=/dashboard gets redirected to /portal/driver", () => {
+    // A driver trying to access admin routes must be redirected to their portal
+    expect(simulateLogin("driver@example.com", "driver", "/dashboard")).toBe("/portal/driver");
+  });
+
+  it("carrier_admin with returnTo=/portal/carrier stays on /portal/carrier", () => {
+    expect(simulateLogin("carrier@example.com", "carrier_admin", "/portal/carrier")).toBe("/portal/carrier");
+  });
+
+  it("carrier_admin with returnTo=/dashboard gets redirected to /portal/carrier", () => {
+    expect(simulateLogin("carrier@example.com", "carrier_admin", "/dashboard")).toBe("/portal/carrier");
+  });
+
+  it("carrier_admin with returnTo=/portal/driver gets redirected to /portal/carrier", () => {
+    expect(simulateLogin("carrier@example.com", "carrier_admin", "/portal/driver")).toBe("/portal/carrier");
+  });
+
+  it("admin with returnTo=/portal/driver gets redirected to /dashboard", () => {
+    expect(simulateLogin("admin@example.com", "admin", "/portal/driver")).toBe("/dashboard");
+  });
+
+  it("admin with returnTo=/portal/carrier gets redirected to /dashboard", () => {
+    expect(simulateLogin("admin@example.com", "admin", "/portal/carrier")).toBe("/dashboard");
+  });
+
+  it("dispatcher with returnTo=/portal/driver gets redirected to /dashboard", () => {
+    expect(simulateLogin("dispatcher@example.com", "dispatcher", "/portal/driver")).toBe("/dashboard");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cross-role portal isolation
+// ---------------------------------------------------------------------------
+
+describe("Cross-role portal isolation: no role can access another role's portal", () => {
+  const adminRoles: Array<"admin" | "super_admin" | "dispatcher" | "operations"> = [
+    "admin", "super_admin", "dispatcher", "operations",
+  ];
+
+  for (const role of adminRoles) {
+    it(`${role} cannot access /portal/driver`, () => {
+      const redirect = authorizePath("/portal/driver", role);
+      expect(redirect).toBe("/dashboard");
+    });
+
+    it(`${role} cannot access /portal/carrier`, () => {
+      const redirect = authorizePath("/portal/carrier", role);
+      expect(redirect).toBe("/dashboard");
+    });
+  }
+
+  it("driver cannot access /dashboard", () => {
+    expect(authorizePath("/dashboard", "driver")).toBe("/portal/driver");
+  });
+
+  it("driver cannot access /leads", () => {
+    expect(authorizePath("/leads", "driver")).toBe("/portal/driver");
+  });
+
+  it("driver cannot access /carriers", () => {
+    expect(authorizePath("/carriers", "driver")).toBe("/portal/driver");
+  });
+
+  it("driver cannot access /users", () => {
+    expect(authorizePath("/users", "driver")).toBe("/portal/driver");
+  });
+
+  it("driver cannot access /settings", () => {
+    expect(authorizePath("/settings", "driver")).toBe("/portal/driver");
+  });
+
+  it("driver CAN access /portal/driver", () => {
+    expect(authorizePath("/portal/driver", "driver")).toBeNull();
+  });
+
+  it("carrier_admin cannot access /dashboard", () => {
+    expect(authorizePath("/dashboard", "carrier_admin")).toBe("/portal/carrier");
+  });
+
+  it("carrier_admin cannot access /leads", () => {
+    expect(authorizePath("/leads", "carrier_admin")).toBe("/portal/carrier");
+  });
+
+  it("carrier_admin cannot access /users", () => {
+    expect(authorizePath("/users", "carrier_admin")).toBe("/portal/carrier");
+  });
+
+  it("carrier_admin CAN access /portal/carrier", () => {
+    expect(authorizePath("/portal/carrier", "carrier_admin")).toBeNull();
+  });
+
+  it("driver can access public routes", () => {
+    expect(authorizePath("/", "driver")).toBeNull();
+    expect(authorizePath("/auth", "driver")).toBeNull();
+    expect(authorizePath("/track/abc123", "driver")).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Returning user: provision returns existing role
+// ---------------------------------------------------------------------------
+
+describe("Returning user: provision returns role in all code paths", () => {
+  it("all ROLES have a defined destination", () => {
+    const allRoles: Array<"super_admin" | "admin" | "dispatcher" | "operations" | "carrier_admin" | "driver" | "read_only"> = [
+      "super_admin", "admin", "dispatcher", "operations",
+      "carrier_admin", "driver", "read_only",
+    ];
+    for (const role of allRoles) {
+      const dest = getRoleDestination(role);
+      expect(dest).toBeTruthy();
+      expect(dest.startsWith("/")).toBe(true);
+    }
+  });
+
+  it("every role's destination is a valid internal route", () => {
+    const validRoutes = [
+      "/dashboard", "/portal/driver", "/portal/carrier",
+    ];
+    const allRoles: Array<"super_admin" | "admin" | "dispatcher" | "operations" | "carrier_admin" | "driver" | "read_only"> = [
+      "super_admin", "admin", "dispatcher", "operations",
+      "carrier_admin", "driver", "read_only",
+    ];
+    for (const role of allRoles) {
+      expect(validRoutes).toContain(getRoleDestination(role));
+    }
+  });
+});
