@@ -1,38 +1,30 @@
-import { useEffect, useRef, useMemo } from "react";
+import { useEffect, useRef, useMemo, useCallback } from "react";
 import { MapPin } from "lucide-react";
 import { fmtDateTime } from "@/lib/dates";
 import type { ReactNode } from "react";
 
-// ---------------------------------------------------------------------------  
-// Leaflet lazy-load wrapper — only imports in browser, keeps bundle small
-// ---------------------------------------------------------------------------  
+// ---------------------------------------------------------------------------
+// MapLibre GL lazy-load — only imports in browser, keeps bundle small
+// ---------------------------------------------------------------------------
 
-let L: typeof import("leaflet") | null = null;
+let maplibregl: typeof import("maplibre-gl") | null = null;
 
-async function loadLeaflet() {
-  if (L) return L;
-
-  await import("leaflet/dist/leaflet.css");
-  L = await import("leaflet");
-  return L;
+async function loadMapLibre() {
+  if (maplibregl) return maplibregl;
+  await import("maplibre-gl/dist/maplibre-gl.css");
+  maplibregl = await import("maplibre-gl");
+  return maplibregl;
 }
 
-// ---------------------------------------------------------------------------  
-// XSS-safe HTML escaping — never inject raw database values into popups
-// ---------------------------------------------------------------------------  
+// ---------------------------------------------------------------------------
+// OpenFreeMap style — no API key required
+// ---------------------------------------------------------------------------
 
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
+const OPENFREEMAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
 
-// ---------------------------------------------------------------------------  
+// ---------------------------------------------------------------------------
 // Types
-// ---------------------------------------------------------------------------  
+// ---------------------------------------------------------------------------
 
 export interface TruckMarker {
   truckId: string;
@@ -60,19 +52,39 @@ export interface TruckMapProps {
   onTruckClick?: (truck: TruckMarker) => void;
 }
 
-// ---------------------------------------------------------------------------  
+// ---------------------------------------------------------------------------
+// Helper: SVG markup for truck marker (used as MapLibre HTML element)
+// ---------------------------------------------------------------------------
+
+function truckMarkerSvg(color: string): string {
+  return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 18H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3.19M15 6h2.81A2 2 0 0 1 20 8v8a2 2 0 0 1-2 2h-2"/><line x1="23" y1="13" x2="23" y2="11"/><polyline points="11 6 7 12 13 12 9 18"/></svg>`;
+}
+
+function makeMarkerHtml(color: string): string {
+  return `<div style="width:28px;height:28px;border-radius:50%;background:${color};border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center">${truckMarkerSvg(color)}</div>`;
+}
+
+// ---------------------------------------------------------------------------
 // Component
-// ---------------------------------------------------------------------------  
+// ---------------------------------------------------------------------------
 
 export function TruckMap({ trucks, height = "h-80", className, emptyState, onTruckClick }: TruckMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<import("leaflet").Map | null>(null);
-  const markersRef = useRef<import("leaflet").Marker[]>([]);
+  const mapRef = useRef<import("maplibre-gl").Map | null>(null);
+  const markersRef = useRef<import("maplibre-gl").Marker[]>([]);
 
   const validTrucks = useMemo(
     () => trucks.filter((t) => Number.isFinite(t.lat) && Number.isFinite(t.lon)),
     [trucks],
   );
+
+  // Clean up existing markers without destroying the map
+  const clearMarkers = useCallback(() => {
+    for (const m of markersRef.current) {
+      m.remove();
+    }
+    markersRef.current = [];
+  }, []);
 
   useEffect(() => {
     if (!containerRef.current || validTrucks.length === 0) return;
@@ -80,105 +92,168 @@ export function TruckMap({ trucks, height = "h-80", className, emptyState, onTru
     let cancelled = false;
 
     (async () => {
-      const leaflet = await loadLeaflet();
+      const mgl = await loadMapLibre();
       if (cancelled || !containerRef.current) return;
 
-      // Clean up old map
+      // If map already exists, just update markers
       if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-      }
+        clearMarkers();
+        const map = mapRef.current;
 
-      const map = leaflet.map(containerRef.current, {
-        zoomControl: true,
-        attributionControl: true,
-        scrollWheelZoom: true,
-      });
+        const bounds = new mgl.LngLatBounds();
+        for (const truck of validTrucks) {
+          const age = Date.now() - truck.at;
+          const isLive = age < 15 * 60 * 1000;
+          const isStale = age >= 15 * 60 * 1000 && age < 60 * 60 * 1000;
+          const markerColor = isLive ? "#16a34a" : isStale ? "#f59e0b" : "#6b7280";
 
-      leaflet
-        .tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          attribution: '&copy; <a href="https://osm.org/copyright">OpenStreetMap</a>',
-          maxZoom: 18,
-        })
-        .addTo(map);
+          const el = document.createElement("div");
+          el.innerHTML = makeMarkerHtml(markerColor);
+          el.style.cursor = "pointer";
 
-      const bounds = leaflet.latLngBounds([]);
+          const marker = new mgl.Marker({ element: el })
+            .setLngLat([truck.lon, truck.lat])
+            .addTo(map);
 
-      for (const truck of validTrucks) {
-        const age = Date.now() - truck.at;
-        const LIVE_THRESHOLD = 15 * 60 * 1000; // 15 min
-        const STALE_THRESHOLD = 60 * 60 * 1000; // 1 hour
-        const isLive = age < LIVE_THRESHOLD;
-        const isStale = age >= LIVE_THRESHOLD && age < STALE_THRESHOLD;
-        const isStopped = !truck.trackingActive && age >= LIVE_THRESHOLD;
-        
-        // Icon color: green=live, yellow=stale, gray=stopped
-        const markerColor = isLive ? "#16a34a" : isStale ? "#f59e0b" : "#6b7280";
-        const icon = leaflet.divIcon({
-          className: "",
-          html: `<div style="width:28px;height:28px;border-radius:50%;background:${markerColor};border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 18H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3.19M15 6h2.81A2 2 0 0 1 20 8v8a2 2 0 0 1-2 2h-2"/><line x1="23" y1="13" x2="23" y2="11"/><polyline points="11 6 7 12 13 12 9 18"/></svg>
-          </div>`,
-          iconSize: [28, 28],
-          iconAnchor: [14, 14],
-        });
+          // Popup
+          const age2 = Date.now() - truck.at;
+          const live = age2 < 15 * 60 * 1000;
+          const stale = age2 >= 15 * 60 * 1000 && age2 < 60 * 60 * 1000;
+          const stopped = !truck.trackingActive && age2 >= 15 * 60 * 1000;
+          const statusLabel = live ? "Live" : stale ? "Stale" : stopped ? "Stopped" : (truck.availability ?? "Unknown");
+          const locationLabel = truck.location ?? `${truck.lat.toFixed(4)}, ${truck.lon.toFixed(4)}`;
+          const timeLabel = live ? "Live" : `Last known — ${fmtDateTime(truck.at)}`;
+          const sourceLabel = truck.source ? ` · ${truck.source.replace("_", " ")}` : "";
 
-        const marker = leaflet.marker([truck.lat, truck.lon], { icon }).addTo(map);
+          marker.setPopup(
+            new mgl.Popup({ offset: 16, closeButton: false }).setHTML(`
+              <div style="min-width:200px;font-family:system-ui,sans-serif">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                  <strong style="font-size:14px">${escapeHtml(truck.unitNumber)}${truck.type ? ` (${escapeHtml(truck.type)})` : ""}</strong>
+                  <span style="font-size:11px;padding:2px 8px;border-radius:9999px;background:${live ? "#dcfce7" : "#fef3c7"};color:${live ? "#166534" : "#92400e"}">${escapeHtml(statusLabel)}</span>
+                </div>
+                ${truck.driverName ? `<div style="font-size:12px;color:#6b7280;margin-bottom:4px">Driver: ${escapeHtml(truck.driverName)}</div>` : ""}
+                <div style="font-size:12px;color:#6b7280;margin-bottom:4px">
+                  📍 ${escapeHtml(locationLabel)}
+                </div>
+                <div style="font-size:11px;color:#9ca3af;display:flex;align-items:center;gap:4px">
+                  <span>${live ? "🟢" : "🟡"}</span> ${escapeHtml(timeLabel)}${escapeHtml(sourceLabel)}
+                  ${truck.accuracy ? ` · ±${Math.round(truck.accuracy)}m` : ""}
+                </div>
+                <div style="margin-top:8px">
+                  <a href="/trucks/${encodeURIComponent(truck.truckId)}" style="font-size:12px;color:#2563eb;text-decoration:underline">View truck details →</a>
+                </div>
+              </div>
+            `)
+          );
 
-        const statusLabel = isLive ? "Live" : isStale ? "Stale" : isStopped ? "Stopped" : (truck.availability ?? "Unknown");
-        const locationLabel = truck.location ?? `${truck.lat.toFixed(4)}, ${truck.lon.toFixed(4)}`;
-        const timeLabel = isLive ? "Live" : `Last known — ${fmtDateTime(truck.at)}`;
-        const sourceLabel = truck.source ? ` · ${truck.source.replace("_", " ")}` : "";
+          if (onTruckClick) {
+            el.addEventListener("click", () => onTruckClick(truck));
+          }
 
-        marker.bindPopup(`
-          <div style="min-width:200px;font-family:system-ui,sans-serif">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-              <strong style="font-size:14px">${escapeHtml(truck.unitNumber)}${truck.type ? ` (${escapeHtml(truck.type)})` : ""}</strong>
-              <span style="font-size:11px;padding:2px 8px;border-radius:9999px;background:${isLive ? "#dcfce7" : "#fef3c7"};color:${isLive ? "#166534" : "#92400e"}">${escapeHtml(statusLabel)}</span>
-            </div>
-            ${truck.driverName ? `<div style="font-size:12px;color:#6b7280;margin-bottom:4px">Driver: ${escapeHtml(truck.driverName)}</div>` : ""}
-            <div style="font-size:12px;color:#6b7280;margin-bottom:4px">
-              <span style="color:#6b7280">📍</span> ${escapeHtml(locationLabel)}
-            </div>
-            <div style="font-size:11px;color:#9ca3af;display:flex;align-items:center;gap:4px">
-              <span>${isLive ? "🟢" : "🟡"}</span> ${escapeHtml(timeLabel)}${escapeHtml(sourceLabel)}
-              ${truck.accuracy ? ` · \\u00B1${Math.round(truck.accuracy)}m` : ""}
-            </div>
-            <div style="margin-top:8px">
-              <a href="/trucks/${encodeURIComponent(truck.truckId)}" style="font-size:12px;color:#2563eb;text-decoration:underline">View truck details \\u2192</a>
-            </div>
-          </div>
-        `);
-
-        if (onTruckClick) {
-          marker.on("click", () => onTruckClick(truck));
+          bounds.extend([truck.lon, truck.lat]);
+          markersRef.current.push(marker);
         }
 
-        bounds.extend([truck.lat, truck.lon]);
-        markersRef.current.push(marker);
+        if (validTrucks.length === 1) {
+          map.setCenter([validTrucks[0].lon, validTrucks[0].lat]);
+          map.setZoom(12);
+        } else if (validTrucks.length > 1) {
+          map.fitBounds(bounds, { padding: 60 });
+        }
+        return;
       }
 
-      if (validTrucks.length === 1) {
-        map.setView([validTrucks[0].lat, validTrucks[0].lon], 12);
-      } else if (validTrucks.length > 1) {
-        map.fitBounds(bounds.pad(0.15));
-      }
+      // First mount — create the map
+      const center: [number, number] = validTrucks.length === 1
+        ? [validTrucks[0].lon, validTrucks[0].lat]
+        : [-98.5, 39.8]; // center of US
+
+      const map = new mgl.Map({
+        container: containerRef.current,
+        style: OPENFREEMAP_STYLE,
+        center,
+        zoom: validTrucks.length === 1 ? 12 : 4,
+        attributionControl: { compact: true },
+        scrollZoom: true,
+      });
+
+      map.addControl(new mgl.NavigationControl({ showCompass: false }), "top-right");
+
+      map.on("load", () => {
+        if (cancelled) return;
+
+        const bounds2 = new mgl.LngLatBounds();
+        for (const truck of validTrucks) {
+          const age = Date.now() - truck.at;
+          const isLive = age < 15 * 60 * 1000;
+          const isStale = age >= 15 * 60 * 1000 && age < 60 * 60 * 1000;
+          const markerColor = isLive ? "#16a34a" : isStale ? "#f59e0b" : "#6b7280";
+
+          const el = document.createElement("div");
+          el.innerHTML = makeMarkerHtml(markerColor);
+          el.style.cursor = "pointer";
+
+          const marker = new mgl.Marker({ element: el })
+            .setLngLat([truck.lon, truck.lat])
+            .addTo(map);
+
+          const age2 = Date.now() - truck.at;
+          const live = age2 < 15 * 60 * 1000;
+          const stale = age2 >= 15 * 60 * 1000 && age2 < 60 * 60 * 1000;
+          const stopped = !truck.trackingActive && age2 >= 15 * 60 * 1000;
+          const statusLabel = live ? "Live" : stale ? "Stale" : stopped ? "Stopped" : (truck.availability ?? "Unknown");
+          const locationLabel = truck.location ?? `${truck.lat.toFixed(4)}, ${truck.lon.toFixed(4)}`;
+          const timeLabel = live ? "Live" : `Last known — ${fmtDateTime(truck.at)}`;
+          const sourceLabel = truck.source ? ` · ${truck.source.replace("_", " ")}` : "";
+
+          marker.setPopup(
+            new mgl.Popup({ offset: 16, closeButton: false }).setHTML(`
+              <div style="min-width:200px;font-family:system-ui,sans-serif">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                  <strong style="font-size:14px">${escapeHtml(truck.unitNumber)}${truck.type ? ` (${escapeHtml(truck.type)})` : ""}</strong>
+                  <span style="font-size:11px;padding:2px 8px;border-radius:9999px;background:${live ? "#dcfce7" : "#fef3c7"};color:${live ? "#166534" : "#92400e"}">${escapeHtml(statusLabel)}</span>
+                </div>
+                ${truck.driverName ? `<div style="font-size:12px;color:#6b7280;margin-bottom:4px">Driver: ${escapeHtml(truck.driverName)}</div>` : ""}
+                <div style="font-size:12px;color:#6b7280;margin-bottom:4px">
+                  📍 ${escapeHtml(locationLabel)}
+                </div>
+                <div style="font-size:11px;color:#9ca3af;display:flex;align-items:center;gap:4px">
+                  <span>${live ? "🟢" : "🟡"}</span> ${escapeHtml(timeLabel)}${escapeHtml(sourceLabel)}
+                  ${truck.accuracy ? ` · ±${Math.round(truck.accuracy)}m` : ""}
+                </div>
+                <div style="margin-top:8px">
+                  <a href="/trucks/${encodeURIComponent(truck.truckId)}" style="font-size:12px;color:#2563eb;text-decoration:underline">View truck details →</a>
+                </div>
+              </div>
+            `)
+          );
+
+          if (onTruckClick) {
+            el.addEventListener("click", () => onTruckClick(truck));
+          }
+
+          bounds2.extend([truck.lon, truck.lat]);
+          markersRef.current.push(marker);
+        }
+
+        if (validTrucks.length > 1) {
+          map.fitBounds(bounds2, { padding: 60 });
+        }
+      });
 
       mapRef.current = map;
-
-      // Fix map sizing after render
-      setTimeout(() => map.invalidateSize(), 100);
     })();
 
     return () => {
       cancelled = true;
-      markersRef.current = [];
+      clearMarkers();
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
       }
     };
-  }, [validTrucks, onTruckClick]);
+  }, [validTrucks, onTruckClick, clearMarkers]);
 
   // Empty state
   if (validTrucks.length === 0) {
@@ -196,4 +271,17 @@ export function TruckMap({ trucks, height = "h-80", className, emptyState, onTru
   }
 
   return <div ref={containerRef} className={`relative rounded-lg border border-border/50 overflow-hidden ${height} ${className ?? ""}`} />;
+}
+
+// ---------------------------------------------------------------------------
+// XSS-safe HTML escaping
+// ---------------------------------------------------------------------------
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
