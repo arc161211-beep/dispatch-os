@@ -32,6 +32,7 @@ import {
   LayoutDashboard,
   ListTodo,
   LogOut,
+  MapPin,
   Menu,
   MessageSquare,
   Moon,
@@ -94,6 +95,7 @@ function useNavItems() {
           items: [
             { to: "/loads", label: "Loads", icon: Package },
             { to: "/trucks", label: "Trucks", icon: Truck },
+            { to: "/truck-map", label: "Live Map", icon: MapPin },
             { to: "/drivers", label: "Drivers", icon: UserRound },
           ] as NavItem[],
         },
@@ -126,6 +128,7 @@ function useNavItems() {
           { to: "/leads", label: "Leads", icon: Users },
           { to: "/carriers", label: "Carriers", icon: Building2 },
           { to: "/trucks", label: "Trucks", icon: Truck },
+          { to: "/truck-map", label: "Live Map", icon: MapPin },
           { to: "/drivers", label: "Drivers", icon: UserRound },
           { to: "/loads", label: "Loads", icon: Package },
           { to: "/brokers", label: "Brokers", icon: Handshake },

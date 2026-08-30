@@ -7,7 +7,8 @@ import { useTimezone, useCanWrite } from "@/hooks/use-app";
 import { fmtDate, fmtTime, fmtDateTime } from "@/lib/dates";
 import { PageHeader, StatCard, StatusBadge, KV, LoadingState, EmptyState, SectionCard } from "@/components/app/shared";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, MapPin, Clock, Truck as TruckIcon, UserRound, Package } from "lucide-react";
+import { TruckMap, type TruckMarker } from "@/components/app/TruckMap";
+import { ArrowLeft, MapPin, Clock, Truck as TruckIcon, UserRound, Package, Navigation, Gauge, Radio, RadioTower } from "lucide-react";
 
 const fadeUp = { initial: { opacity: 0, y: 12 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.35 } };
 
@@ -81,6 +82,104 @@ export default function TruckDetail() {
         <StatCard label="Type" value={truck.type ?? "Not specified"} />
         <StatCard label="Location" value={latestLocation?.location ?? truck.currentLocation ?? "Not set"} icon={<MapPin className="size-4" />} />
         <StatCard label="Location Status" value={latestLocation ? (isLive ? "Live" : `Last known — ${fmtTime(latestLocation.at, tz)}`) : truck.lat != null ? "Location set (no GPS history)" : "Location sharing not started"} icon={<Clock className="size-4" />} tone={latestLocation ? (isLive ? "good" : "warn") : "default"} />
+      </motion.div>
+
+      {/* Location & Live Tracking */}
+      <motion.div {...fadeUp} transition={{ delay: 0.1 }} className="space-y-4">
+        <SectionCard
+          title="Location & Live Tracking"
+          actions={
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => navigate("/truck-map")}>
+              <MapPin className="size-3.5" /> View Full Live Map
+            </Button>
+          }
+        >
+          {/* Has GPS coordinates — show map */}
+          {latestLocation ? (
+            <div className="space-y-4">
+              {/* Status bar */}
+              <div className="flex items-center gap-3">
+                <div className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ${isLive ? "bg-[#22C55E]/10 text-[#22C55E]" : "bg-[#F5A623]/10 text-[#F5A623]"}`}>
+                  <span className={`size-1.5 rounded-full ${isLive ? "bg-[#22C55E] animate-pulse" : "bg-[#F5A623]"}`} />
+                  {isLive ? "🟢 Live" : "🟡 Last Known Location"}
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  Updated {fmtDateTime(latestLocation.at, tz)}
+                </span>
+              </div>
+
+              {/* GPS details */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="rounded-lg bg-muted/50 p-2.5 text-center">
+                  <MapPin className="size-3.5 mx-auto text-muted-foreground" />
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground mt-1">Position</p>
+                  <p className="text-xs font-medium font-mono">{latestLocation.lat.toFixed(4)}, {latestLocation.lon.toFixed(4)}</p>
+                </div>
+                <div className="rounded-lg bg-muted/50 p-2.5 text-center">
+                  <Gauge className="size-3.5 mx-auto text-muted-foreground" />
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground mt-1">Accuracy</p>
+                  <p className="text-xs font-medium">{latestLocation.accuracy != null ? `±${Math.round(latestLocation.accuracy)}m` : "—"}</p>
+                </div>
+                <div className="rounded-lg bg-muted/50 p-2.5 text-center">
+                  <Navigation className="size-3.5 mx-auto text-muted-foreground" />
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground mt-1">Speed</p>
+                  <p className="text-xs font-medium">{latestLocation.speed != null ? `${Math.round(latestLocation.speed)} mph` : "—"}</p>
+                </div>
+                <div className="rounded-lg bg-muted/50 p-2.5 text-center">
+                  <Clock className="size-3.5 mx-auto text-muted-foreground" />
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground mt-1">Source</p>
+                  <p className="text-xs font-medium">{latestLocation.source?.replace(/_/g, " ") ?? "—"}</p>
+                </div>
+              </div>
+
+              {/* Single-truck map */}
+              <TruckMap
+                trucks={[{
+                  truckId: truck._id,
+                  unitNumber: truck.unitNumber,
+                  type: truck.type,
+                  lat: latestLocation.lat,
+                  lon: latestLocation.lon,
+                  location: latestLocation.location,
+                  at: latestLocation.at,
+                  source: latestLocation.source,
+                  accuracy: latestLocation.accuracy,
+                  speed: latestLocation.speed,
+                  trackingActive: isLive,
+                }]}
+                height="h-64"
+              />
+            </div>
+          ) : (
+            /* No GPS data — clear empty state */
+            <div className="py-6">
+              {(truck as any).driverId ? (
+                <div className="flex flex-col items-center text-center">
+                  <div className="size-12 rounded-2xl bg-[#F5A623]/10 flex items-center justify-center mb-3">
+                    <Radio className="size-6 text-[#F5A623]" />
+                  </div>
+                  <p className="text-sm font-semibold">Waiting for driver to start location sharing</p>
+                  <p className="mt-1 text-xs text-muted-foreground max-w-sm">
+                    The assigned driver must log into the Driver Portal and select &quot;Start Sharing Location&quot;, then allow browser GPS permission.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center text-center">
+                  <div className="size-12 rounded-2xl bg-muted/60 flex items-center justify-center mb-3">
+                    <UserRound className="size-6 text-muted-foreground" />
+                  </div>
+                  <p className="text-sm font-semibold">No driver assigned to this truck</p>
+                  <p className="mt-1 text-xs text-muted-foreground max-w-sm">
+                    Assign a driver to this truck so they can share their GPS location during transit.
+                  </p>
+                  <Button variant="outline" size="sm" className="mt-3 gap-1.5" onClick={() => navigate("/drivers")}>
+                    <UserRound className="size-3.5" /> Manage Drivers
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </SectionCard>
       </motion.div>
 
       {/* Details */}

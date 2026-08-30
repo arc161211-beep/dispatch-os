@@ -46,6 +46,7 @@ const PortalCarrier = lazy(() => import("./pages/PortalCarrier.tsx"));
 const TrackingPage = lazy(() => import("./pages/TrackingPage.tsx"));
 const UserManagement = lazy(() => import("./pages/UserManagement.tsx"));
 const StatusPage = lazy(() => import("./pages/Status.tsx"));
+const TruckMapPage = lazy(() => import("./pages/TruckMapPage.tsx"));
 
 // Premium loading fallback for route transitions
 function RouteLoading() {
@@ -193,6 +194,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/carriers" element={<Protected><RoleGate><Carriers /></RoleGate></Protected>} />
                 <Route path="/carriers/:id" element={<Protected><RoleGate><CarrierDetail /></RoleGate></Protected>} />
                 <Route path="/trucks" element={<Protected><RoleGate><Trucks /></RoleGate></Protected>} />
+                <Route path="/truck-map" element={<Protected><RoleGate><TruckMapPage /></RoleGate></Protected>} />
                 <Route path="/trucks/:id" element={<Protected><RoleGate><TruckDetail /></RoleGate></Protected>} />
                 <Route path="/drivers" element={<Protected><RoleGate><Drivers /></RoleGate></Protected>} />
                 <Route path="/drivers/:id" element={<Protected><RoleGate><DriverDetail /></RoleGate></Protected>} />

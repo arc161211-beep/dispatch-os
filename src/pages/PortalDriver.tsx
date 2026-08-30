@@ -250,6 +250,22 @@ export default function PortalDriver() {
     return "offline";
   })();
 
+  // Human-readable tracking status with icon and color
+  const trackingStatusDisplay = (() => {
+    switch (trackingStatus) {
+      case "live":
+        return { label: "🟢 Sharing Live Location", color: "text-[#22C55E]", dotColor: "bg-[#22C55E] animate-pulse" };
+      case "stale":
+        return { label: "🟡 Waiting for GPS", color: "text-[#F5A623]", dotColor: "bg-[#F5A623] animate-pulse" };
+      case "stopped":
+        return { label: "⚪ Location Sharing Not Started", color: "text-muted-foreground", dotColor: "bg-muted-foreground" };
+      case "offline":
+        return { label: "🔴 Location Unavailable", color: "text-[#EF4444]", dotColor: "bg-[#EF4444]" };
+      case "unavailable":
+        return { label: "⚫ Browser Does Not Support Location", color: "text-muted-foreground", dotColor: "bg-muted-foreground" };
+    }
+  })();
+
   const driverTruckLocation = activeLoad?.truckId
     ? truckLocations?.find((t: any) => t.truckId === activeLoad.truckId)
     : null;
@@ -290,13 +306,36 @@ export default function PortalDriver() {
             </div>
 
             <div className="p-4 space-y-3">
+              {/* Explicit tracking status */}
+              <div className="flex items-center gap-2">
+                <span className={cn("size-2 rounded-full shrink-0", trackingStatusDisplay.dotColor)} />
+                <span className={cn("text-xs font-medium", trackingStatusDisplay.color)}>{trackingStatusDisplay.label}</span>
+              </div>
+
               {/* Permission status */}
               {gpsPermission === "denied" && (
                 <div className="flex items-start gap-2 rounded-xl bg-[#EF4444]/5 border border-[#EF4444]/20 p-3 text-xs">
                   <AlertTriangle className="size-3.5 text-[#EF4444] shrink-0 mt-0.5" />
                   <div>
                     <p className="font-medium text-[#EF4444]">Location permission denied</p>
-                    <p className="text-muted-foreground mt-0.5">Enable location access in your browser settings to share your position.</p>
+                    <p className="text-muted-foreground mt-0.5">To enable location sharing:</p>
+                    <ol className="mt-1 space-y-0.5 text-muted-foreground list-decimal list-inside">
+                      <li>Open your browser settings</li>
+                      <li>Find &quot;Site Settings&quot; or &quot;Privacy&quot;</li>
+                      <li>Allow location access for this site</li>
+                      <li>Refresh the page</li>
+                    </ol>
+                  </div>
+                </div>
+              )}
+
+              {/* Browser not supported */}
+              {gpsPermission === "unavailable" && (
+                <div className="flex items-start gap-2 rounded-xl bg-muted/30 border border-border/30 p-3 text-xs">
+                  <AlertTriangle className="size-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-medium">Browser does not support location</p>
+                    <p className="text-muted-foreground mt-0.5">Your browser does not support GPS location sharing. Please use a modern browser like Chrome, Firefox, or Safari.</p>
                   </div>
                 </div>
               )}

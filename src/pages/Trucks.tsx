@@ -11,7 +11,7 @@ import { PageHeader, StatusBadge, NextActionPill, LoadingState, EmptyState, erro
 import { Field, Grid, SelectInput, TextArea, TextInput } from "@/components/app/forms";
 import { ResponsiveTable, type Column } from "@/components/app/ResponsiveTable";
 import { ImportCsvDialog, ExportCsvButton } from "@/components/app/ImportExport";
-import { Search, Truck, Plus, ExternalLink } from "lucide-react";
+import { Search, Truck, Plus, ExternalLink, MapPin } from "lucide-react";
 import { nextAction } from "@/lib/status";
 import { useQuery as useConvexQuery } from "convex/react";
 
@@ -66,6 +66,7 @@ export default function Trucks() {
     <div className="space-y-6">
       <PageHeader title="Trucks" description={`${trucks?.length ?? 0} trucks`}
         actions={canWrite && (<>
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => navigate("/truck-map")}><MapPin className="size-3.5" /> View Live Map</Button>
           <ImportCsvDialog entity="trucks" mutationName="importTrucks" title="Import trucks" description="CSV with unitNumber, carrierName, type, make, model, year, plate, currentLocation, availability." requiredColumns={["unitNumber", "carrierName"]} mapRow={(r) => ({ unitNumber: r.unitNumber ?? "", carrierName: r.carrierName ?? "", type: r.type, make: r.make, model: r.model, year: r.year ? Number(r.year) : undefined, plate: r.plate, currentLocation: r.currentLocation, availability: r.availability })} />
           <ExportCsvButton filename="trucks.csv" headers={["Unit #", "Carrier", "Type", "Make", "Model", "Year", "Location", "Status"]} rows={(trucks ?? []).map((t) => [t.unitNumber, carriers?.find((c) => c._id === t.carrierId)?.companyName ?? "", t.type ?? "", t.make ?? "", t.model ?? "", t.year ?? "", t.currentLocation ?? "", t.availability])} />
           <Button size="sm" className="gap-1.5" onClick={() => setDialog("create")}><Plus className="size-3.5" /> New truck</Button>
