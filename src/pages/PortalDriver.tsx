@@ -74,6 +74,10 @@ export default function PortalDriver() {
   const watchIdRef = useRef<number | null>(null);
   const truckIdRef = useRef<string | null>(null);
 
+  // Resolve the driver record linked to this authenticated user
+  const driversList = useQuery(api.drivers.list, {});
+  const myDriverRecord = driversList?.find((d: any) => d.email?.toLowerCase() === user?.email?.toLowerCase());
+
   const myLoads = (loads ?? []).filter(
     (l: LoadType) => !["Completed", "Cancelled"].includes(l.status),
   );
@@ -476,6 +480,17 @@ export default function PortalDriver() {
                   <span className="text-muted-foreground">Location sharing has not started. Tap "Start Sharing Location" above.</span>
                 </div>
               ) : null}
+
+              {/* Missing truckId warning */}
+              {activeLoad && !activeLoad.truckId && (
+                <div className="flex items-start gap-2 rounded-xl bg-[#EF4444]/5 border border-[#EF4444]/20 p-3 text-[11px]">
+                  <AlertTriangle className="size-3.5 text-[#EF4444] shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-[#EF4444]">No truck assigned to this load</p>
+                    <p className="text-muted-foreground mt-0.5">Location sharing requires a truck assignment. Contact your dispatcher to assign a truck to this load.</p>
+                  </div>
+                </div>
+              )}
 
               {/* NEXT ACTION — Premium CTA */}
               {OPERATIONAL_TRANSITIONS[activeLoad.status] && (

@@ -110,7 +110,7 @@ export const getTruckLocations = query({
     const s = await requireOrg(ctx);
     const scope = loadScope(s);
 
-    // Get all trucks (scoped by carrier for carrier_admin/driver)
+    // Get all trucks (scoped by carrier/driver)
     let trucks = await ctx.db
       .query("trucks")
       .withIndex("by_org", (q) => q.eq("orgId", s.orgId))
@@ -119,6 +119,18 @@ export const getTruckLocations = query({
     if (scope.carrierId) {
       trucks = trucks.filter((t) => t.carrierId === scope.carrierId);
     }
+
+    // Drivers should only see their assigned truck
+    if (s.role === "driver" && s.driverId) {
+      const driver = await ctx.db.get(s.driverId);
+      if (driver && "truckId" in driver && driver.truckId) {
+        trucks = trucks.filter((t) => t._id === driver.truckId);
+      } else {
+        // Driver has no assigned truck — show nothing
+        trucks = [];
+      }
+    }
+
     if (args.carrierId) {
       trucks = trucks.filter((t) => t.carrierId === args.carrierId);
     }
