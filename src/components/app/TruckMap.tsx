@@ -50,6 +50,10 @@ export interface TruckMapProps {
   className?: string;
   emptyState?: ReactNode;
   onTruckClick?: (truck: TruckMarker) => void;
+  /** Optional driving route coordinates [lng, lat] for route line overlay */
+  routeCoordinates?: [number, number][];
+  /** Route line color (default: electric blue) */
+  routeColor?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -68,10 +72,12 @@ function makeMarkerHtml(color: string): string {
 // Component
 // ---------------------------------------------------------------------------
 
-export function TruckMap({ trucks, height = "h-80", className, emptyState, onTruckClick }: TruckMapProps) {
+export function TruckMap({ trucks, height = "h-80", className, emptyState, onTruckClick, routeCoordinates, routeColor = "#4F8CFF" }: TruckMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<import("maplibre-gl").Map | null>(null);
   const markersRef = useRef<import("maplibre-gl").Marker[]>([]);
+  const routeSourceId = "truck-map-route";
+  const routeLayerId = "truck-map-route-layer";
 
   const validTrucks = useMemo(
     () => trucks.filter((t) => Number.isFinite(t.lat) && Number.isFinite(t.lon)),
@@ -254,6 +260,78 @@ export function TruckMap({ trucks, height = "h-80", className, emptyState, onTru
       }
     };
   }, [validTrucks, onTruckClick, clearMarkers]);
+
+  // Route line overlay — draws driving route on the map
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !routeCoordinates || routeCoordinates.length < 2) return;
+
+    const drawRoute = () => {
+      // Remove previous route source/layer if they exist
+      if (map.getLayer(routeLayerId)) {
+        map.removeLayer(routeLayerId);
+      }
+      if (map.getSource(routeSourceId)) {
+        map.removeSource(routeSourceId);
+      }
+
+      map.addSource(routeSourceId, {
+        type: "geojson",
+        data: {
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "LineString",
+            coordinates: routeCoordinates,
+          },
+        },
+      });
+
+      map.addLayer({
+        id: routeLayerId,
+        type: "line",
+        source: routeSourceId,
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+        },
+        paint: {
+          "line-color": routeColor,
+          "line-width": 4,
+          "line-opacity": 0.8,
+        },
+      });
+
+      // Fit map to include route
+      try {
+        const mgl = maplibregl;
+        if (mgl) {
+          const bounds = new mgl.LngLatBounds();
+          for (const coord of routeCoordinates) {
+            bounds.extend(coord);
+          }
+          map.fitBounds(bounds, { padding: 60 });
+        }
+      } catch {
+        // Ignore bounds fitting errors
+      }
+    };
+
+    if (map.isStyleLoaded()) {
+      drawRoute();
+    } else {
+      map.on("load", drawRoute);
+    }
+
+    return () => {
+      if (map.getLayer(routeLayerId)) {
+        map.removeLayer(routeLayerId);
+      }
+      if (map.getSource(routeSourceId)) {
+        map.removeSource(routeSourceId);
+      }
+    };
+  }, [routeCoordinates, routeColor, routeSourceId, routeLayerId]);
 
   // Empty state
   if (validTrucks.length === 0) {
