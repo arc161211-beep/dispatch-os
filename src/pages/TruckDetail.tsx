@@ -8,7 +8,8 @@ import { fmtDate, fmtTime, fmtDateTime } from "@/lib/dates";
 import { PageHeader, StatCard, StatusBadge, KV, LoadingState, EmptyState, SectionCard } from "@/components/app/shared";
 import { Button } from "@/components/ui/button";
 import { TruckMap, type TruckMarker } from "@/components/app/TruckMap";
-import { ArrowLeft, MapPin, Clock, Truck as TruckIcon, UserRound, Package, Navigation, Gauge, Radio, RadioTower } from "lucide-react";
+import { ArrowLeft, MapPin, Clock, Truck as TruckIcon, UserRound, Package, Navigation, Gauge, Radio, RadioTower, Cloud } from "lucide-react";
+import { WeatherCard } from "@/components/app/WeatherCard";
 
 const fadeUp = { initial: { opacity: 0, y: 12 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.35 } };
 
@@ -182,8 +183,20 @@ export default function TruckDetail() {
         </SectionCard>
       </motion.div>
 
+      {/* Weather at truck location */}
+      {latestLocation && (
+        <motion.div {...fadeUp} transition={{ delay: 0.14 }}>
+          <WeatherCard
+            latitude={latestLocation.lat}
+            longitude={latestLocation.lon}
+            label="🌤️ Current Weather at Truck Location"
+            className="max-w-lg"
+          />
+        </motion.div>
+      )}
+
       {/* Details */}
-      <motion.div {...fadeUp} transition={{ delay: 0.12 }} className="grid gap-6 lg:grid-cols-2">
+      <motion.div {...fadeUp} transition={{ delay: 0.16 }} className="grid gap-6 lg:grid-cols-2">
         <SectionCard title="Truck Details">
           <div className="space-y-0.5">
             <KV label="Unit Number">{truck.unitNumber}</KV>

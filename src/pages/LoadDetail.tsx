@@ -15,6 +15,7 @@ import { Field, Grid, SelectInput, TextInput, TextArea } from "@/components/app/
 import { UploadDocumentButton } from "@/components/app/UploadDocument";
 import { fmtDate, fmtDateTime, fmtRelative } from "@/lib/dates";
 import { ArrowLeft, FileText, Package, Truck, UserRound, Clock, Route, Wallet, MapPin, ChevronRight } from "lucide-react";
+import { WeatherCard } from "@/components/app/WeatherCard";
 import type { Id } from "@/convex/_generated/dataModel";
 
 const STATUS_INDEX = LOAD_STATUSES.reduce((acc, s, i) => ({ ...acc, [s]: i }), {} as Record<string, number>);
