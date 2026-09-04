@@ -96,6 +96,7 @@ const SAFE_INTERNAL_PATHS = [
   "/carriers",
   "/trucks",
   "/truck-map",
+  "/load-board",
   "/drivers",
   "/loads",
   "/brokers",
