@@ -201,6 +201,10 @@ export const saveLoad = mutation({
     weight: v.optional(v.number()),
     shipperName: v.optional(v.string()),
     notes: v.optional(v.string()),
+    originLat: v.optional(v.number()),
+    originLng: v.optional(v.number()),
+    destinationLat: v.optional(v.number()),
+    destinationLng: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const s = await requireWrite(ctx);
@@ -233,6 +237,10 @@ export const saveLoad = mutation({
       deadheadMiles: args.deadheadMiles,
       weight: args.weight,
       source: "manual",
+      originLat: args.originLat,
+      originLng: args.originLng,
+      destinationLat: args.destinationLat,
+      destinationLng: args.destinationLng,
       notes: args.notes ? `Imported from TrukTek Load Board. ${args.notes}` : "Imported from TrukTek Load Board.",
     });
 

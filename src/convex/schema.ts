@@ -302,6 +302,12 @@ const schema = defineSchema(
       sourceExternalId: v.optional(v.string()),
       notes: v.optional(v.string()),
       demo: v.optional(v.boolean()),
+      originLat: v.optional(v.number()),
+      originLng: v.optional(v.number()),
+      originFormatted: v.optional(v.string()),
+      destinationLat: v.optional(v.number()),
+      destinationLng: v.optional(v.number()),
+      destinationFormatted: v.optional(v.string()),
     })
       .index("by_org", ["orgId"])
       .index("by_org_status", ["orgId", "status"])

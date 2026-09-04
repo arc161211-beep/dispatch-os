@@ -146,6 +146,10 @@ export default function LoadBoard() {
         deadheadMiles: load.deadheadMiles,
         weight: load.weight,
         shipperName: load.shipperNm,
+        originLat: load.coordinates?.[0]?.[1],
+        originLng: load.coordinates?.[0]?.[0],
+        destinationLat: load.coordinates?.[load.coordinates.length - 1]?.[1],
+        destinationLng: load.coordinates?.[load.coordinates.length - 1]?.[0],
       });
       toast.success("Load saved to DispatchOS!");
       setSaveDialogLoad(null);

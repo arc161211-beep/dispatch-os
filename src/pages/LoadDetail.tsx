@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useParams, useNavigate } from "react-router";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery, useAction } from "convex/react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { api } from "@/convex/_generated/api";
@@ -14,8 +14,8 @@ import { PageHeader, StatusBadge, Money, SectionCard, LoadingState, KV, errorMes
 import { Field, Grid, SelectInput, TextInput, TextArea } from "@/components/app/forms";
 import { UploadDocumentButton } from "@/components/app/UploadDocument";
 import { fmtDate, fmtDateTime, fmtRelative } from "@/lib/dates";
-import { ArrowLeft, FileText, Package, Truck, UserRound, Clock, Route, Wallet, MapPin, ChevronRight } from "lucide-react";
-import { WeatherCard } from "@/components/app/WeatherCard";
+import { ArrowLeft, FileText, Package, Truck, UserRound, Clock, Route, Wallet, MapPin, ChevronRight, Globe, Loader2 } from "lucide-react";
+import { WeatherCard, RouteWeather } from "@/components/app/WeatherCard";
 import type { Id } from "@/convex/_generated/dataModel";
 
 const STATUS_INDEX = LOAD_STATUSES.reduce((acc, s, i) => ({ ...acc, [s]: i }), {} as Record<string, number>);
@@ -34,6 +34,8 @@ export default function LoadDetail() {
   const setStatus = useMutation(api.loads.setStatus);
   const assignResources = useMutation(api.loads.assignResources);
   const remove = useMutation(api.loads.remove);
+  const geocodeLoad = useAction(api.geocoding.geocodeLoad);
+  const [geocoding, setGeocoding] = useState(false);
 
   const [statusDialog, setStatusDialog] = useState<string | null>(null);
   const [assignDialog, setAssignDialog] = useState(false);
@@ -69,6 +71,26 @@ export default function LoadDetail() {
   const handleDelete = async () => {
     try { await remove({ id: l._id as any }); toast.success("Load deleted."); navigate("/loads"); } catch (e) { toast.error(errorMessage(e)); }
   };
+
+  const handleGeocode = async () => {
+    setGeocoding(true);
+    try {
+      const result = await geocodeLoad({ loadId: l._id as any });
+      if (result.success) {
+        toast.success(result.message);
+      } else {
+        toast.warning(result.message);
+      }
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setGeocoding(false);
+    }
+  };
+
+  const hasOriginCoords = l.originLat != null && l.originLng != null;
+  const hasDestCoords = l.destinationLat != null && l.destinationLng != null;
+  const hasAllCoords = hasOriginCoords && hasDestCoords;
 
   const currentIndex = STATUS_INDEX[l.status] ?? 0;
   const progress = ((currentIndex) / (LOAD_STATUSES.length - 1)) * 100;
@@ -191,14 +213,59 @@ export default function LoadDetail() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4 mt-4">
+          {/* Route Weather — show when coordinates are available */}
+          {hasAllCoords && (
+            <RouteWeather
+              originLabel={l.origin ?? "Origin"}
+              originLat={l.originLat!}
+              originLng={l.originLng!}
+              destLabel={l.destination ?? "Destination"}
+              destLat={l.destinationLat!}
+              destLng={l.destinationLng!}
+            />
+          )}
+
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <SectionCard title="Route & schedule">
               <KV label="Origin">{l.origin ?? "—"}</KV>
+              {hasOriginCoords && (
+                <KV label="Origin Coords">
+                  <span className="flex items-center gap-1 font-mono text-xs">
+                    <MapPin className="size-3 text-[#22C55E]" />
+                    {l.originLat!.toFixed(4)}, {l.originLng!.toFixed(4)}
+                  </span>
+                </KV>
+              )}
               <KV label="Destination">{l.destination ?? "—"}</KV>
+              {hasDestCoords && (
+                <KV label="Dest Coords">
+                  <span className="flex items-center gap-1 font-mono text-xs">
+                    <MapPin className="size-3 text-[#F5A623]" />
+                    {l.destinationLat!.toFixed(4)}, {l.destinationLng!.toFixed(4)}
+                  </span>
+                </KV>
+              )}
               <KV label="Pickup">{fmtDateTime(l.pickupDate, tz)}</KV>
               <KV label="Delivery">{fmtDateTime(l.deliveryDate, tz)}</KV>
               <KV label="Loaded miles">{l.loadedMiles ?? "—"}</KV>
               <KV label="Deadhead">{l.deadheadMiles ?? "—"}</KV>
+              {!hasAllCoords && (
+                <div className="mt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={handleGeocode}
+                    disabled={geocoding}
+                  >
+                    {geocoding ? <Loader2 className="size-3.5 animate-spin" /> : <Globe className="size-3.5" />}
+                    {geocoding ? "Resolving…" : "Resolve Location"}
+                  </Button>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Location coordinates unavailable — click to resolve
+                  </p>
+                </div>
+              )}
             </SectionCard>
             <SectionCard title="Load details">
               <KV label="Equipment">{l.equipment ?? "—"}</KV>

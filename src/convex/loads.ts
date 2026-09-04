@@ -52,6 +52,12 @@ const loadInput = v.object({
   source: v.optional(v.union(...LOAD_SOURCES.map((s) => v.literal(s)))),
   sourceExternalId: v.optional(v.string()),
   notes: v.optional(v.string()),
+  originLat: v.optional(v.number()),
+  originLng: v.optional(v.number()),
+  originFormatted: v.optional(v.string()),
+  destinationLat: v.optional(v.number()),
+  destinationLng: v.optional(v.number()),
+  destinationFormatted: v.optional(v.string()),
 });
 
 type LoadInput = {
@@ -318,6 +324,12 @@ export const create = mutation({
       source: input.source ?? "manual",
       sourceExternalId: optString(input.sourceExternalId, 100),
       notes: optString(input.notes, 4000),
+      originLat: input.originLat,
+      originLng: input.originLng,
+      originFormatted: optString(input.originFormatted, 500),
+      destinationLat: input.destinationLat,
+      destinationLng: input.destinationLng,
+      destinationFormatted: optString(input.destinationFormatted, 500),
     });
 
     await ctx.db.insert("loadStatusHistory", {
