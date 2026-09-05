@@ -153,17 +153,20 @@ Any → Disputed → Completed/Cancelled/Booked
 
 ## Provider Abstraction
 
-All external providers are behind interfaces:
-- AI (NVIDIA Nemotron)
-- Email (not configured)
-- SMS/WhatsApp (not configured)
-- Maps (Leaflet/OsmD)
-- Load Boards (not configured)
-- Payments (not configured)
-- E-Signature (not configured)
-- GPS/Telematics (not configured)
+All external providers are behind interfaces (server-side Convex actions):
+- **AI**: NVIDIA Nemotron 3 Super (`NVIDIA_API_KEY`, `NVIDIA_BASE_URL`, `NVIDIA_MODEL`)
+- **Email/OTP**: Resend (`RESEND_API_KEY`, `RESEND_FROM_EMAIL`) — email delivery only, no payment
+- **Maps**: MapLibre GL + OpenFreeMap tiles (no API key required)
+- **Routing**: OpenRouteService (`OPENROUTESERVICE_API_KEY`) — driving directions, distance, ETA
+- **Geocoding**: Geoapify (`GEOAPIFY_API_KEY`) — address to coordinates
+- **Weather**: Open-Meteo (no API key required) — current conditions + 24h forecast
+- **Load Board**: TrukTek (no API key required, public REST endpoint)
+- **GPS/Telematics**: Browser Geolocation API (driver portal)
+- Payments: not configured
+- E-Signature: not configured
+- SMS/WhatsApp: not configured
 
-Core system works without any external API.
+Core system works without any external API (OTP delivery and AI require configured keys).
 
 ## Security
 

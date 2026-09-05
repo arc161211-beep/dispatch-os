@@ -73,6 +73,11 @@ export default function PortalDriver() {
   const [trackingError, setTrackingError] = useState<string | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const truckIdRef = useRef<string | null>(null);
+  // L5: GPS throttle — minimum 5 seconds between Convex mutations
+  const GPS_THROTTLE_MS = 5000;
+  const lastSendTimeRef = useRef<number>(0);
+  const pendingPositionRef = useRef<GeolocationPosition | null>(null);
+  const throttleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Resolve the driver record linked to this authenticated user
   const driversList = useQuery(api.drivers.list, {});
@@ -117,9 +122,13 @@ export default function PortalDriver() {
     }
   }, []);
 
-  // Cleanup on unmount — stop watching
+  // Cleanup on unmount — stop watching and clear throttle timer
   useEffect(() => {
     return () => {
+      if (throttleTimerRef.current) {
+        clearTimeout(throttleTimerRef.current);
+        throttleTimerRef.current = null;
+      }
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
         watchIdRef.current = null;
@@ -127,7 +136,36 @@ export default function PortalDriver() {
     };
   }, []);
 
-  const sendLocationUpdate = useCallback(async (position: GeolocationPosition) => {
+  // L5: Flush the pending position immediately (used on stop tracking)
+  const flushPendingUpdate = useCallback(async () => {
+    if (throttleTimerRef.current) {
+      clearTimeout(throttleTimerRef.current);
+      throttleTimerRef.current = null;
+    }
+    const pending = pendingPositionRef.current;
+    if (pending && activeLoad?.truckId) {
+      pendingPositionRef.current = null;
+      lastSendTimeRef.current = Date.now();
+      try {
+        await updateTruckLocation({
+          truckId: activeLoad.truckId,
+          lat: pending.coords.latitude,
+          lon: pending.coords.longitude,
+          source: "browser_geolocation",
+          accuracy: pending.coords.accuracy,
+          speed: pending.coords.speed ?? undefined,
+          heading: pending.coords.heading ?? undefined,
+        });
+      } catch (e) {
+        console.error("[tracking] Failed to send pending location:", e);
+      }
+    }
+  }, [activeLoad?.truckId, updateTruckLocation]);
+
+  // L5: Throttled GPS update — always updates UI instantly, but throttles
+  // Convex mutation calls to at most once every GPS_THROTTLE_MS.
+  // The latest position is always eventually sent.
+  const sendLocationUpdate = useCallback((position: GeolocationPosition) => {
     if (!activeLoad?.truckId) return;
 
     const lat = position.coords.latitude;
@@ -136,14 +174,22 @@ export default function PortalDriver() {
     const spd = position.coords.speed ?? undefined;
     const hdg = position.coords.heading ?? undefined;
 
+    // Always update UI state immediately
     setCoords({ lat, lon });
     setAccuracy(acc);
     setSpeed(spd ?? null);
     setLastUpdateAt(Date.now());
     setTrackingError(null);
 
-    try {
-      await updateTruckLocation({
+    // Throttle the actual Convex mutation
+    const now = Date.now();
+    const elapsed = now - lastSendTimeRef.current;
+
+    if (elapsed >= GPS_THROTTLE_MS) {
+      // Enough time has passed — send immediately
+      lastSendTimeRef.current = now;
+      pendingPositionRef.current = null;
+      updateTruckLocation({
         truckId: activeLoad.truckId,
         lat,
         lon,
@@ -151,11 +197,19 @@ export default function PortalDriver() {
         accuracy: acc,
         speed: spd,
         heading: hdg,
-      });
-    } catch (e) {
-      console.error("[tracking] Failed to send location:", e);
+      }).catch((e) => console.error("[tracking] Failed to send location:", e));
+    } else {
+      // Store as pending — will be sent after throttle window
+      pendingPositionRef.current = position;
+      if (!throttleTimerRef.current) {
+        const delay = GPS_THROTTLE_MS - elapsed;
+        throttleTimerRef.current = setTimeout(() => {
+          throttleTimerRef.current = null;
+          flushPendingUpdate();
+        }, delay);
+      }
     }
-  }, [activeLoad?.truckId, updateTruckLocation]);
+  }, [activeLoad?.truckId, updateTruckLocation, flushPendingUpdate]);
 
   const handleStartTracking = useCallback(() => {
     if (!navigator.geolocation) {
@@ -218,6 +272,9 @@ export default function PortalDriver() {
   }, [activeLoad?.truckId, sendLocationUpdate, startTrackingMutation]);
 
   const handleStopTracking = useCallback(() => {
+    // L5: Flush any pending GPS update before stopping
+    flushPendingUpdate();
+
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
@@ -233,7 +290,7 @@ export default function PortalDriver() {
     }
 
     toast.success("Location sharing stopped");
-  }, [stopTrackingMutation]);
+  }, [stopTrackingMutation, flushPendingUpdate]);
 
   // Auto-stop tracking when active load changes or becomes unavailable
   useEffect(() => {
