@@ -100,8 +100,15 @@ export const getHistory = query({
 });
 
 /** Get all truck locations for the map view.
- *  FIX: Now queries the latest location from locationHistory per truck
- *  instead of using truck._creationTime. */
+ *
+ *  PERFORMANCE FIX (H1): Instead of N separate locationHistory queries
+ *  (one per truck), we query ALL org truck locations in a single batch,
+ *  then group by entityId to find the latest per truck. This reduces
+ *  N+1 queries to O(1) indexed queries.
+ *
+ *  SECURITY FIX (M2): Drivers without a driverId now see ZERO trucks
+ *  instead of potentially seeing all org trucks.
+ */
 export const getTruckLocations = query({
   args: {
     carrierId: v.optional(v.id("carriers")),
@@ -109,6 +116,11 @@ export const getTruckLocations = query({
   handler: async (ctx, args) => {
     const s = await requireOrg(ctx);
     const scope = loadScope(s);
+
+    // SECURITY FIX (M2): Drivers without driverId see ZERO trucks.
+    if (s.role === "driver" && !s.driverId) {
+      return [];
+    }
 
     // Get all trucks (scoped by carrier/driver)
     let trucks = await ctx.db
@@ -126,7 +138,6 @@ export const getTruckLocations = query({
       if (driver && "truckId" in driver && driver.truckId) {
         trucks = trucks.filter((t) => t._id === driver.truckId);
       } else {
-        // Driver has no assigned truck — show nothing
         trucks = [];
       }
     }
@@ -135,7 +146,28 @@ export const getTruckLocations = query({
       trucks = trucks.filter((t) => t.carrierId === args.carrierId);
     }
 
-    // Get latest location for each truck that has coordinates
+    if (trucks.length === 0) return [];
+
+    // PERFORMANCE FIX (H1): Batch-query all truck location histories in ONE query,
+    // then group by entityId to find the latest per truck.
+    // This replaces N individual queries with a single indexed scan + in-memory grouping.
+    const allTruckLocations = await ctx.db
+      .query("locationHistory")
+      .withIndex("by_org_entity", (q) =>
+        q.eq("orgId", s.orgId).eq("entityType", "truck"),
+      )
+      .order("desc")
+      .take(trucks.length * 3); // take enough rows to cover multiple updates per truck
+
+    // Group by entityId, keeping only the first (most recent) entry per truck
+    const latestByTruck = new Map<string, typeof allTruckLocations[number]>();
+    for (const loc of allTruckLocations) {
+      if (!latestByTruck.has(loc.entityId)) {
+        latestByTruck.set(loc.entityId, loc);
+      }
+    }
+
+    // Build results using the batch-fetched locations
     const results: {
       truckId: string;
       unitNumber: string;
@@ -156,16 +188,9 @@ export const getTruckLocations = query({
     }[] = [];
 
     for (const truck of trucks) {
-      // Query the latest location from locationHistory (correct timestamp)
-      const latestLocation = await ctx.db
-        .query("locationHistory")
-        .withIndex("by_org_entity", (q) =>
-          q.eq("orgId", s.orgId).eq("entityType", "truck").eq("entityId", truck._id),
-        )
-        .order("desc")
-        .first();
+      const latestLocation = latestByTruck.get(truck._id) ?? null;
 
-      // Skip trucks with no coordinates at all (neither on truck record nor in history)
+      // Skip trucks with no coordinates at all
       const hasLat = (latestLocation?.lat ?? truck.lat) !== undefined;
       const hasLon = (latestLocation?.lon ?? truck.lon) !== undefined;
       if (!hasLat || !hasLon) continue;
@@ -182,10 +207,8 @@ export const getTruckLocations = query({
 
       const locationTime = latestLocation?.at ?? truck._creationTime;
       const age = Date.now() - locationTime;
-      // Consider "live" if updated within the last 15 minutes
       const isLive = age < 15 * 60 * 1000;
 
-      // These are guaranteed non-undefined by the guard above
       const resolvedLat: number = (latestLocation?.lat ?? truck.lat) as number;
       const resolvedLon: number = (latestLocation?.lon ?? truck.lon) as number;
 

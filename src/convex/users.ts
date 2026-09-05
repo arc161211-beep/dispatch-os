@@ -114,10 +114,10 @@ export const provision = mutation({
     // 2) New organization path — only allowed if no org exists yet (first user).
     // SECURITY: In a private platform, new orgs should only be created by
     // the first user. Subsequent users must be invited.
-    const allUsers = await ctx.db.query("users").collect();
-    const anyWithOrg = allUsers.filter((u) => u.orgId);
-    if (anyWithOrg.length > 0) {
-      // There are already provisioned users — new signup is not allowed.
+    // PERFORMANCE FIX (H2): Instead of scanning ALL users, query the organizations
+    // table which is tiny (one row per org). This is O(1) instead of O(N).
+    const existingOrg = await ctx.db.query("organizations").first();
+    if (existingOrg) {
       throw new ConvexError(
         "This is a private platform. You must be invited by an administrator to gain access.",
       );
