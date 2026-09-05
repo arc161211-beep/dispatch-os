@@ -8,7 +8,13 @@ DispatchOS is a private, multi-tenant freight dispatch management platform built
 - **Frontend**: React 19, TypeScript, Vite, Tailwind CSS, shadcn/ui
 - **Backend**: Convex (real-time database + serverless functions)
 - **Auth**: Convex Auth with Email OTP provider
-- **Maps**: Leaflet with OpenStreetMap tiles
+- **Maps**: MapLibre GL JS with OpenFreeMap tiles (no API key required)
+- **Routing**: OpenRouteService API (server-side)
+- **Geocoding**: Geoapify API (server-side)
+- **Weather**: Open-Meteo API (free, no key required)
+- **Load Board**: TrukTek public API (free, no key required)
+- **AI**: NVIDIA Nemotron LLM (server-side)
+- **Email/OTP**: Resend API (server-side)
 - **Charts**: Recharts
 - **Animation**: Framer Motion
 
