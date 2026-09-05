@@ -238,12 +238,12 @@ export type AiCategory = (typeof AI_CATEGORIES)[number];
 // ---------------------------------------------------------------------------
 
 export const INTEGRATION_PROVIDERS = [
-  { key: "ai", label: "AI Assistant (Nemotron)", envs: ["NVIDIA_API_KEY", "NVIDIA_BASE_URL", "NVIDIA_MODEL"] },
-  { key: "email", label: "Email Provider", envs: ["SMTP_HOST", "SMTP_USER"] },
-  { key: "sms", label: "SMS / WhatsApp", envs: ["TWILIO_SID"] },
-  { key: "maps", label: "Maps / Geocoding", envs: ["MAPBOX_TOKEN", "GOOGLE_MAPS_KEY"] },
-  { key: "loadboard", label: "Load Board API", envs: ["DAT_API_KEY"] },
+  { key: "ai", label: "AI Assistant (NVIDIA Nemotron)", envs: ["NVIDIA_API_KEY", "NVIDIA_BASE_URL", "NVIDIA_MODEL"] },
+  { key: "email", label: "Email / OTP (Resend)", envs: ["RESEND_API_KEY", "RESEND_FROM_EMAIL"] },
+  { key: "maps", label: "Maps (MapLibre + OpenFreeMap)", envs: [] },
+  { key: "routing", label: "Routing (OpenRouteService)", envs: ["OPENROUTESERVICE_API_KEY"] },
+  { key: "geocoding", label: "Geocoding (Geoapify)", envs: ["GEOAPIFY_API_KEY"] },
+  { key: "weather", label: "Weather (Open-Meteo)", envs: [] },
+  { key: "loadboard", label: "Load Board (TrukTek)", envs: [] },
   { key: "payments", label: "Payment Gateway", envs: ["STRIPE_SECRET_KEY"] },
-  { key: "storage", label: "File Storage", envs: ["S3_BUCKET"] },
-  { key: "signature", label: "E-Signature", envs: ["DOCUSIGN_KEY"] },
 ] as const;
