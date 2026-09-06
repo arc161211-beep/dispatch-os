@@ -181,37 +181,43 @@ export const getUserDiagnostic = query({
     await requireAdmin(ctx);
     const email = args.email.toLowerCase().trim();
 
-    const allUsers = await ctx.db.query("users").collect();
-    const matchingUsers = allUsers
-      .filter((u) => u.email?.toLowerCase().trim() === email)
-      .map((u) => ({
-        _id: u._id,
-        name: u.name ?? "",
-        email: u.email ?? "",
-        role: u.role ?? null,
-        orgId: u.orgId ?? null,
-        driverId: u.driverId ?? null,
-        carrierId: u.carrierId ?? null,
-        accountStatus: u.accountStatus ?? null,
-        lastLoginAt: u.lastLoginAt ?? 0,
-        createdAt: u._creationTime,
-      }));
+    const matchingUsers = await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", email))
+      .collect()
+      .then((users) =>
+        users.map((u) => ({
+          _id: u._id,
+          name: u.name ?? "",
+          email: u.email ?? "",
+          role: u.role ?? null,
+          orgId: u.orgId ?? null,
+          driverId: u.driverId ?? null,
+          carrierId: u.carrierId ?? null,
+          accountStatus: u.accountStatus ?? null,
+          lastLoginAt: u.lastLoginAt ?? 0,
+          createdAt: u._creationTime,
+        }))
+      );
 
-    const allPending = await ctx.db.query("pendingUsers").collect();
-    const matchingPending = allPending
-      .filter((p) => p.email.toLowerCase().trim() === email)
-      .map((p) => ({
-        _id: p._id,
-        email: p.email,
-        role: p.role,
-        orgId: p.orgId,
-        driverId: p.driverId ?? null,
-        carrierId: p.carrierId ?? null,
-        status: p.status,
-        createdAt: p.createdAt,
-        expiresAt: p.expiresAt,
-        isExpired: p.expiresAt < Date.now(),
-      }));
+    const matchingPending = await ctx.db
+      .query("pendingUsers")
+      .withIndex("by_email", (q) => q.eq("email", email))
+      .collect()
+      .then((pending) =>
+        pending.map((p) => ({
+          _id: p._id,
+          email: p.email,
+          role: p.role,
+          orgId: p.orgId,
+          driverId: p.driverId ?? null,
+          carrierId: p.carrierId ?? null,
+          status: p.status,
+          createdAt: p.createdAt,
+          expiresAt: p.expiresAt,
+          isExpired: p.expiresAt < Date.now(),
+        }))
+      );
 
     return { users: matchingUsers, invitations: matchingPending };
   },
@@ -261,9 +267,12 @@ export const getOrgUsers = query({
   args: {},
   handler: async (ctx) => {
     const s = await requireAdmin(ctx);
-    const users = await ctx.db.query("users").collect();
+    const users = await ctx.db
+      .query("users")
+      .withIndex("by_org", (q) => q.eq("orgId", s.orgId))
+      .collect();
     const members = users
-      .filter((u) => u.orgId === s.orgId && !u.isAnonymous)
+      .filter((u) => !u.isAnonymous)
       .map((u) => ({
         _id: u._id,
         name: u.name ?? "",
@@ -584,8 +593,11 @@ export const getUserStats = query({
   args: {},
   handler: async (ctx) => {
     const s = await requireAdmin(ctx);
-    const users = await ctx.db.query("users").collect();
-    const orgUsers = users.filter((u) => u.orgId === s.orgId && !u.isAnonymous);
+    const orgUsers = await ctx.db
+      .query("users")
+      .withIndex("by_org", (q) => q.eq("orgId", s.orgId))
+      .collect()
+      .then((users) => users.filter((u) => !u.isAnonymous));
     const byRole: Record<string, number> = {};
     for (const u of orgUsers) {
       const role = (u.role ?? "read_only") as string;

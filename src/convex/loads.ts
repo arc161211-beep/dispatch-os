@@ -564,8 +564,16 @@ export const assignResources = mutation({
       if (!truck || truck.orgId !== s.orgId) throw new ConvexError("Truck not found.");
       patch.truckId = args.truckId;
       if (load.truckId && load.truckId !== args.truckId) {
-        const old = await ctx.db.get(load.truckId);
-        if (old) await ctx.db.patch(old._id, { currentLoadId: undefined, availability: "Available" });
+        const oldTruck = await ctx.db.get(load.truckId);
+        if (oldTruck) await ctx.db.patch(oldTruck._id, { currentLoadId: undefined, availability: "Available" });
+        // If the old load's driver is linked to the old truck, clear that assignment
+        // so the driver doesn't appear assigned to a truck they are no longer using.
+        if (load.driverId) {
+          const oldDriver = await ctx.db.get(load.driverId);
+          if (oldDriver && oldDriver.truckId === load.truckId) {
+            await ctx.db.patch(load.driverId, { truckId: undefined });
+          }
+        }
       }
       await ctx.db.patch(args.truckId, { currentLoadId: args.id as never });
     }
@@ -613,8 +621,21 @@ export const remove = mutation({
     const load = await ctx.db.get(args.id);
     if (!load || load.orgId !== s.orgId) throw new ConvexError("Load not found.");
     if (load.status !== "Draft") throw new ConvexError("Only draft loads can be deleted.");
+
+    // Clean up related history records that belong exclusively to this draft.
+    const [statusHistories, rateHistories] = await Promise.all([
+      ctx.db.query("loadStatusHistory").withIndex("by_load", (q) => q.eq("loadId", args.id)).collect(),
+      ctx.db.query("rateHistory").withIndex("by_load", (q) => q.eq("loadId", args.id)).collect(),
+    ]);
+    for (const record of statusHistories) {
+      await ctx.db.delete(record._id);
+    }
+    for (const record of rateHistories) {
+      await ctx.db.delete(record._id);
+    }
+
     await ctx.db.delete(args.id);
-    await audit(ctx, s, { action: "load.deleted", entity: "load", entityId: args.id, metadata: { loadNumber: load.loadNumber } });
+    await audit(ctx, s, { action: "load.deleted", entity: "load", entityId: args.id, metadata: { loadNumber: load.loadNumber, statusHistoriesDeleted: statusHistories.length, rateHistoriesDeleted: rateHistories.length } });
     return { ok: true };
   },
 });

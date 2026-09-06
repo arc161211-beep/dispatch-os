@@ -46,7 +46,8 @@ const schema = defineSchema(
       disabled: v.optional(v.boolean()),
       accountStatus: v.optional(v.union(v.literal("active"), v.literal("suspended"), v.literal("revoked"), v.literal("invited"))),
       lastLoginAt: v.optional(v.number()),
-    }).index("email", ["email"]),
+    }).index("email", ["email"])
+      .index("by_org", ["orgId"]),
 
     organizations: defineTable({
       name: v.string(),

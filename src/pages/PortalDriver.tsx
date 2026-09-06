@@ -81,7 +81,11 @@ export default function PortalDriver() {
 
   // Resolve the driver record linked to this authenticated user
   const driversList = useQuery(api.drivers.list, {});
-  const myDriverRecord = driversList?.find((d: any) => d.email?.toLowerCase() === user?.email?.toLowerCase());
+  // Prefer driverId from the authenticated user record (set during provisioning).
+  // Fall back to email matching only when driverId is unavailable.
+  const myDriverRecord = user?.driverId
+    ? driversList?.find((d: any) => d._id === user.driverId)
+    : driversList?.find((d: any) => d.email?.toLowerCase() === user?.email?.toLowerCase());
 
   const myLoads = (loads ?? []).filter(
     (l: LoadType) => !["Completed", "Cancelled"].includes(l.status),
