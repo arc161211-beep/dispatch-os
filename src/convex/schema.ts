@@ -463,7 +463,8 @@ const schema = defineSchema(
       .index("by_org", ["orgId"])
       .index("by_org_status", ["orgId", "status"])
       .index("by_org_carrier", ["orgId", "carrierId"])
-      .index("by_org_number", ["orgId", "invoiceNumber"]),
+      .index("by_org_number", ["orgId", "invoiceNumber"])
+      .index("by_org_load", ["orgId", "loadId"]),
 
     payments: defineTable({
       orgId,

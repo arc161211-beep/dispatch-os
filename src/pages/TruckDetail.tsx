@@ -28,6 +28,9 @@ export default function TruckDetail() {
     api.location.getLatest,
     id ? { entityType: "truck", entityId: id } : "skip",
   );
+  // Check if any driver is assigned to this truck (drivers have truckId, not the other way around)
+  const driversList = useQuery(api.drivers.list, {});
+  const assignedDriver = driversList?.find((d: any) => d.truckId === id);
 
   if (!id) return <LoadingState />;
   if (truckData === undefined) return <LoadingState />;
@@ -154,12 +157,12 @@ export default function TruckDetail() {
           ) : (
             /* No GPS data — clear empty state */
             <div className="py-6">
-              {(truck as any).driverId ? (
+              {assignedDriver ? (
                 <div className="flex flex-col items-center text-center">
                   <div className="size-12 rounded-2xl bg-[#F5A623]/10 flex items-center justify-center mb-3">
                     <Radio className="size-6 text-[#F5A623]" />
                   </div>
-                  <p className="text-sm font-semibold">Waiting for driver to start location sharing</p>
+                  <p className="text-sm font-semibold">Waiting for {assignedDriver?.name ?? "driver"} to start location sharing</p>
                   <p className="mt-1 text-xs text-muted-foreground max-w-sm">
                     The assigned driver must log into the Driver Portal and select &quot;Start Sharing Location&quot;, then allow browser GPS permission.
                   </p>

@@ -195,7 +195,7 @@ export const get = query({
       ctx.db.query("loadStatusHistory").withIndex("by_load", (q) => q.eq("loadId", args.id)).order("desc").take(100),
       ctx.db.query("rateHistory").withIndex("by_load", (q) => q.eq("loadId", args.id)).order("desc").take(100),
       ctx.db.query("documents").withIndex("by_org_entity", (q) => q.eq("orgId", s.orgId).eq("entityType", "load").eq("entityId", args.id)).collect(),
-      ctx.db.query("invoices").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).collect().then((all) => all.filter((i) => i.loadId === args.id)),
+      ctx.db.query("invoices").withIndex("by_org_load", (q) => q.eq("orgId", s.orgId).eq("loadId", args.id)).collect(),
       ctx.db.query("conversations").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).collect().then((all) => all.filter((c) => c.entityType === "broker" && c.entityId === load.brokerId)),
     ]);
 
