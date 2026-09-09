@@ -234,6 +234,16 @@ export const AI_CATEGORIES = [
 export type AiCategory = (typeof AI_CATEGORIES)[number];
 
 // ---------------------------------------------------------------------------
+// ETA & Risk Status
+// ---------------------------------------------------------------------------
+
+export const ETA_STATUSES = ["on_time", "at_risk", "delayed", "unknown"] as const;
+export type EtaStatus = (typeof ETA_STATUSES)[number];
+
+export const RISK_STATUSES = ["on_time", "at_risk", "delayed", "unknown"] as const;
+export type RiskStatus = (typeof RISK_STATUSES)[number];
+
+// ---------------------------------------------------------------------------
 // Integration Providers (for System Status page)
 // ---------------------------------------------------------------------------
 

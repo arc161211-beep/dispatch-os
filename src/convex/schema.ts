@@ -268,6 +268,21 @@ const schema = defineSchema(
       carrierId: v.optional(v.id("carriers")),
       truckId: v.optional(v.id("trucks")),
       driverId: v.optional(v.id("drivers")),
+      // Driver acceptance fields
+      offerStatus: v.optional(v.union(v.literal("pending"), v.literal("accepted"), v.literal("rejected"))),
+      acceptedAt: v.optional(v.number()),
+      acceptedBy: v.optional(userId),
+      rejectedAt: v.optional(v.number()),
+      rejectionReason: v.optional(v.string()),
+      // ETA & risk fields
+      eta: v.optional(v.number()),
+      etaDistanceMiles: v.optional(v.number()),
+      etaDurationSeconds: v.optional(v.number()),
+      etaUpdatedAt: v.optional(v.number()),
+      etaStatus: v.optional(v.union(v.literal("on_time"), v.literal("at_risk"), v.literal("delayed"), v.literal("unknown"))),
+      pickupRisk: v.optional(v.union(v.literal("on_time"), v.literal("at_risk"), v.literal("delayed"), v.literal("unknown"))),
+      deliveryRisk: v.optional(v.union(v.literal("on_time"), v.literal("at_risk"), v.literal("delayed"), v.literal("unknown"))),
+      delayMinutes: v.optional(v.number()),
       equipment: v.optional(v.string()),
       commodity: v.optional(v.string()),
       weight: v.optional(v.number()),
@@ -570,7 +585,7 @@ const schema = defineSchema(
       speed: v.optional(v.number()),
       heading: v.optional(v.number()),
       at: v.number(),
-    })
+    }).index("by_entity", ["entityType", "entityId"])
       .index("by_org", ["orgId"])
       .index("by_org_entity", ["orgId", "entityType", "entityId"])
       .index("by_org_entity_at", ["orgId", "entityType", "entityId", "at"]),

@@ -32,6 +32,9 @@ import {
   Clock,
   AlertTriangle,
   Shield,
+  XCircle,
+  Timer,
+  Route,
 } from "lucide-react";
 
 type LoadType = any;
@@ -61,7 +64,13 @@ export default function PortalDriver() {
   const startTrackingMutation = useMutation(api.location.startTracking);
   const stopTrackingMutation = useMutation(api.location.stopTracking);
   const truckLocations = useQuery(api.location.getTruckLocations, {});
+  const acceptLoad = useMutation(api.loads.acceptLoad);
+  const rejectLoad = useMutation(api.loads.rejectLoad);
+  const calculateETA = useMutation(api.loads.calculateETA);
+  const driverOffers = useQuery(api.loads.getDriverOffers, {});
   const [updating, setUpdating] = useState<string | null>(null);
+  const [rejectDialog, setRejectDialog] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
 
   // GPS tracking state
   const [isTracking, setIsTracking] = useState(false);
@@ -91,9 +100,12 @@ export default function PortalDriver() {
     (l: LoadType) => !["Completed", "Cancelled"].includes(l.status),
   );
   const activeLoad = myLoads.find((l: LoadType) =>
-    ["In Transit", "At Delivery", "Loaded", "At Pickup", "Loading", "Booked", "Driver Notified"].includes(l.status),
+    ["In Transit", "At Delivery", "Loaded", "At Pickup", "Loading", "Booked", "Driver Notified"].includes(l.status) &&
+    l.offerStatus !== "rejected",
   );
-  const upcomingLoads = myLoads.filter((l: LoadType) => l._id !== activeLoad?._id);
+  const pendingOffers = (driverOffers ?? []).filter((l: LoadType) => l.offerStatus === "pending");
+  const acceptedLoads = (driverOffers ?? []).filter((l: LoadType) => l.offerStatus === "accepted" && l._id !== activeLoad?._id);
+  const upcomingLoads = myLoads.filter((l: LoadType) => l._id !== activeLoad?._id && l.offerStatus !== "pending" && l.offerStatus !== "rejected");
 
   const handleStatus = async (loadId: string, status: string) => {
     setUpdating(loadId);
@@ -104,6 +116,34 @@ export default function PortalDriver() {
       toast.error(errorMessage(e));
     }
     setUpdating(null);
+  };
+
+  const handleAcceptLoad = async (loadId: string) => {
+    try {
+      await acceptLoad({ loadId: loadId as any });
+      toast.success("Load accepted!");
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
+  };
+
+  const handleRejectLoad = async (loadId: string) => {
+    try {
+      await rejectLoad({ loadId: loadId as any, reason: rejectReason || undefined });
+      toast.success("Load rejected.");
+      setRejectDialog(null);
+      setRejectReason("");
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
+  };
+
+  const handleCalculateETA = async (loadId: string) => {
+    try {
+      await calculateETA({ loadId: loadId as any });
+    } catch (e) {
+      console.error("[eta] Calculation failed:", e);
+    }
   };
 
   // Check GPS permission status on mount
@@ -476,6 +516,82 @@ export default function PortalDriver() {
         </motion.div>
       )}
 
+      {/* ═══════════ PENDING LOAD OFFERS ═══════════ */}
+      {pendingOffers.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+          <div className="rounded-2xl border border-[#F5A623]/30 bg-[#F5A623]/5 overflow-hidden">
+            <div className="bg-[#F5A623]/10 border-b border-[#F5A623]/20 px-4 py-2.5">
+              <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#F5A623]">Load Offers ({pendingOffers.length})</span>
+            </div>
+            <div className="p-4 space-y-3">
+              {pendingOffers.map((offer: LoadType) => (
+                <div key={offer._id} className="rounded-xl border border-border/50 bg-card p-4 space-y-3">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <Link to={`/loads/${offer._id}`} className="text-base font-bold tracking-tight hover:text-primary">
+                        {offer.loadNumber}
+                      </Link>
+                      <div className="grid grid-cols-[1fr_auto_1fr] gap-1 items-center mt-1">
+                        <div className="text-center">
+                          <p className="text-[8px] font-bold uppercase text-muted-foreground">Pickup</p>
+                          <p className="text-xs font-semibold">{offer.origin ?? "?"}</p>
+                        </div>
+                        <ArrowRight className="size-3 text-muted-foreground/40" />
+                        <div className="text-center">
+                          <p className="text-[8px] font-bold uppercase text-muted-foreground">Delivery</p>
+                          <p className="text-xs font-semibold">{offer.destination ?? "?"}</p>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 mt-2 text-[10px]">
+                        <span className="rounded-full bg-muted px-2 py-0.5">{offer.equipment ?? "Any"}</span>
+                        <span className="rounded-full bg-muted px-2 py-0.5">Pickup {fmtDate(offer.pickupDate, tz)}</span>
+                        <span className="rounded-full bg-muted px-2 py-0.5">Delivery {fmtDate(offer.deliveryDate, tz)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => handleAcceptLoad(offer._id)}
+                      className="flex-1 gap-2 h-10 bg-[#22C55E] hover:bg-[#22C55E]/90 text-white text-sm font-semibold"
+                    >
+                      <CheckCircle2 className="size-4" /> Accept Load
+                    </Button>
+                    <Button
+                      onClick={() => setRejectDialog(offer._id)}
+                      variant="outline"
+                      className="flex-1 gap-2 h-10 border-[#EF4444]/30 text-[#EF4444] hover:bg-[#EF4444]/5 text-sm font-semibold"
+                    >
+                      <XCircle className="size-4" /> Reject
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* ═══════════ REJECT DIALOG ═══════════ */}
+      {rejectDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-card rounded-2xl border border-border/50 p-6 max-w-sm w-full mx-4 shadow-xl">
+            <h3 className="text-base font-bold">Reject Load</h3>
+            <p className="text-sm text-muted-foreground mt-1">Optionally provide a reason for rejecting this load.</p>
+            <textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="Reason (optional)"
+              className="mt-3 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm resize-none"
+              rows={3}
+            />
+            <div className="flex gap-2 mt-4">
+              <Button variant="outline" className="flex-1" onClick={() => { setRejectDialog(null); setRejectReason(""); }}>Cancel</Button>
+              <Button variant="destructive" className="flex-1" onClick={() => handleRejectLoad(rejectDialog)}>Confirm Reject</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ═══════════ ACTIVE LOAD ═══════════ */}
       {activeLoad ? (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.05 }}>
@@ -527,6 +643,73 @@ export default function PortalDriver() {
                   </span>
                 )}
               </div>
+
+              {/* ETA Section */}
+              {activeLoad.status === "In Transit" && (
+                <div className="rounded-xl border border-border/30 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">ETA</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 text-[10px]"
+                      onClick={() => handleCalculateETA(activeLoad._id)}
+                    >
+                      <Timer className="size-3 mr-1" /> Refresh ETA
+                    </Button>
+                  </div>
+                  {activeLoad.eta ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <p className="text-[9px] font-bold uppercase text-muted-foreground">Estimated Arrival</p>
+                        <p className="text-sm font-bold">
+                          {new Date(activeLoad.eta).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">{new Date(activeLoad.eta).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-bold uppercase text-muted-foreground">Remaining</p>
+                        <p className="text-sm font-bold">{activeLoad.etaDistanceMiles ?? "—"} mi</p>
+                        <p className="text-[10px] text-muted-foreground">{activeLoad.etaDurationSeconds ? `${Math.floor(activeLoad.etaDurationSeconds / 3600)}h ${Math.round((activeLoad.etaDurationSeconds % 3600) / 60)}m` : "—"}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Tap "Refresh ETA" to calculate your estimated arrival time.</p>
+                  )}
+                  {activeLoad.etaStatus === "delayed" && (
+                    <div className="flex items-center gap-2 rounded-lg bg-[#EF4444]/10 px-2.5 py-1.5">
+                      <AlertTriangle className="size-3.5 text-[#EF4444]" />
+                      <span className="text-xs font-medium text-[#EF4444]">DELAYED — {activeLoad.delayMinutes ?? 0} min late</span>
+                    </div>
+                  )}
+                  {activeLoad.etaStatus === "at_risk" && (
+                    <div className="flex items-center gap-2 rounded-lg bg-[#F5A623]/10 px-2.5 py-1.5">
+                      <AlertTriangle className="size-3.5 text-[#F5A623]" />
+                      <span className="text-xs font-medium text-[#F5A623]">AT RISK — May be late</span>
+                    </div>
+                  )}
+                  {activeLoad.etaStatus === "on_time" && (
+                    <div className="flex items-center gap-2 rounded-lg bg-[#22C55E]/10 px-2.5 py-1.5">
+                      <CheckCircle2 className="size-3.5 text-[#22C55E]" />
+                      <span className="text-xs font-medium text-[#22C55E]">ON TIME</span>
+                    </div>
+                  )}
+                  {activeLoad.etaStatus === "unknown" && (
+                    <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-2.5 py-1.5">
+                      <Clock className="size-3.5 text-muted-foreground" />
+                      <span className="text-xs text-muted-foreground">ETA Unknown — GPS data unavailable</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Offer status */}
+              {activeLoad.offerStatus === "accepted" && (
+                <div className="flex items-center gap-2 rounded-lg bg-[#22C55E]/10 px-2.5 py-1.5">
+                  <CheckCircle2 className="size-3.5 text-[#22C55E]" />
+                  <span className="text-xs font-medium text-[#22C55E]">Load Accepted</span>
+                </div>
+              )}
 
               {/* Location from last update */}
               {driverTruckLocation ? (

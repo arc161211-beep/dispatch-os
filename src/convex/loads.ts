@@ -1,7 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query, QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
-import { FEE_TYPES, LOAD_SOURCES, LOAD_STATUSES, LOAD_TRANSITIONS, TERMINAL_LOAD_STATUSES, LoadStatus } from "./constants";
+import { FEE_TYPES, LOAD_SOURCES, LOAD_STATUSES, LOAD_TRANSITIONS, TERMINAL_LOAD_STATUSES, LoadStatus, ETA_STATUSES, RiskStatus } from "./constants";
 import { audit } from "./lib/audit";
 import { loadScope, requireOrg, requireWrite } from "./lib/context";
 import { deriveLoadFinance } from "./lib/finance";
@@ -590,6 +590,15 @@ export const assignResources = mutation({
       const finance = await financePatch(ctx, s.orgId, {}, args.carrierId);
       Object.assign(changed, finance);
     }
+    // Set offer status when driver is assigned
+    if (args.driverId !== undefined && load.driverId !== args.driverId) {
+      patch.offerStatus = "pending";
+      patch.acceptedAt = undefined;
+      patch.acceptedBy = undefined;
+      patch.rejectedAt = undefined;
+      patch.rejectionReason = undefined;
+    }
+
     await ctx.db.patch(args.id, { ...patch, ...changed } as never);
     await audit(ctx, s, { action: "load.resources.assigned", entity: "load", entityId: args.id, metadata: { ...patch } });
 
@@ -744,6 +753,346 @@ export const importLoads = mutation({
     });
     await audit(ctx, s, { action: "import.completed", entity: "importJob", metadata: { entityType: "loads", total: args.rows.length, inserted, errors: errors.length } });
     return { inserted, errors };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Driver Acceptance / Rejection
+// ---------------------------------------------------------------------------
+
+/** Driver accepts a load offer. Only the assigned driver can accept. */
+export const acceptLoad = mutation({
+  args: { loadId: v.id("loads") },
+  handler: async (ctx, args) => {
+    const s = await requireOrg(ctx);
+    if (s.role !== "driver") throw new ConvexError("Only drivers can accept load offers.");
+    if (!s.driverId) throw new ConvexError("No driver profile found.");
+
+    const load = await ctx.db.get(args.loadId);
+    if (!load || load.orgId !== s.orgId) throw new ConvexError("Load not found.");
+    if (load.driverId !== s.driverId) throw new ConvexError("This load is not assigned to you.");
+    if (load.offerStatus === "accepted") throw new ConvexError("You have already accepted this load.");
+    if (load.offerStatus === "rejected") throw new ConvexError("You have already rejected this load.");
+
+    await ctx.db.patch(args.loadId, {
+      offerStatus: "accepted",
+      acceptedAt: Date.now(),
+      acceptedBy: s.userId as never,
+      rejectedAt: undefined,
+      rejectionReason: undefined,
+    });
+
+    await ctx.db.insert("loadStatusHistory", {
+      orgId: s.orgId as never,
+      loadId: args.loadId,
+      from: load.status,
+      to: load.status,
+      actorId: s.userId as never,
+      actorName: s.name,
+      note: "Driver accepted the load offer",
+      at: Date.now(),
+    });
+    await audit(ctx, s, { action: "load.offer.accepted", entity: "load", entityId: args.loadId, metadata: { driverId: s.driverId, loadNumber: load.loadNumber } });
+
+    // Notify dispatchers
+    await ctx.db.insert("notifications", {
+      orgId: s.orgId as never,
+      userId: s.userId as never,
+      title: `Load ${load.loadNumber} accepted by driver`,
+      body: `${s.name ?? "Driver"} accepted the offer for ${load.origin ?? "?"} → ${load.destination ?? "?"}`,
+      link: `/loads/${args.loadId}`,
+      type: "load",
+    });
+
+    return { ok: true };
+  },
+});
+
+/** Driver rejects a load offer. Only the assigned driver can reject. */
+export const rejectLoad = mutation({
+  args: {
+    loadId: v.id("loads"),
+    reason: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const s = await requireOrg(ctx);
+    if (s.role !== "driver") throw new ConvexError("Only drivers can reject load offers.");
+    if (!s.driverId) throw new ConvexError("No driver profile found.");
+
+    const load = await ctx.db.get(args.loadId);
+    if (!load || load.orgId !== s.orgId) throw new ConvexError("Load not found.");
+    if (load.driverId !== s.driverId) throw new ConvexError("This load is not assigned to you.");
+    if (load.offerStatus === "rejected") throw new ConvexError("You have already rejected this load.");
+    if (load.offerStatus === "accepted") throw new ConvexError("You have already accepted this load.");
+
+    await ctx.db.patch(args.loadId, {
+      offerStatus: "rejected",
+      rejectedAt: Date.now(),
+      rejectionReason: args.reason ? args.reason.slice(0, 500) : undefined,
+      acceptedAt: undefined,
+      acceptedBy: undefined,
+    });
+
+    await ctx.db.insert("loadStatusHistory", {
+      orgId: s.orgId as never,
+      loadId: args.loadId,
+      from: load.status,
+      to: load.status,
+      actorId: s.userId as never,
+      actorName: s.name,
+      note: args.reason ? `Driver rejected: ${args.reason.slice(0, 500)}` : "Driver rejected the load offer",
+      at: Date.now(),
+    });
+    await audit(ctx, s, { action: "load.offer.rejected", entity: "load", entityId: args.loadId, metadata: { driverId: s.driverId, loadNumber: load.loadNumber, reason: args.reason } });
+
+    // Notify dispatchers
+    await ctx.db.insert("notifications", {
+      orgId: s.orgId as never,
+      userId: s.userId as never,
+      title: `Load ${load.loadNumber} rejected by driver`,
+      body: `${s.name ?? "Driver"} rejected the offer${args.reason ? `: ${args.reason.slice(0, 200)}` : ""}`,
+      link: `/loads/${args.loadId}`,
+      type: "load",
+    });
+
+    return { ok: true };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// ETA Calculation (server-side)
+// ---------------------------------------------------------------------------
+
+/** Calculate ETA for a load using GPS + destination coordinates.
+ *  Uses Haversine distance as fallback when ORS is unavailable.
+ *  Throttled: only recalculates if GPS moved significantly (>0.5mi) or >5min since last calc. */
+export const calculateETA = mutation({
+  args: { loadId: v.id("loads") },
+  handler: async (ctx, args) => {
+    const s = await requireOrg(ctx);
+    const load = await ctx.db.get(args.loadId);
+    if (!load || load.orgId !== s.orgId) throw new ConvexError("Load not found.");
+
+    // Only calculate ETA for active in-transit loads
+    const activeStatuses = ["In Transit", "At Pickup", "Loaded", "At Delivery"];
+    if (!activeStatuses.includes(load.status)) {
+      return { updated: false, reason: "Load not in transit" };
+    }
+
+    // Need destination coordinates
+    if (load.destinationLat == null || load.destinationLng == null) {
+      await ctx.db.patch(args.loadId, {
+        etaStatus: "unknown",
+        deliveryRisk: "unknown",
+        pickupRisk: "unknown",
+      });
+      return { updated: true, etaStatus: "unknown" };
+    }
+
+    // Get latest truck GPS
+    if (!load.truckId) {
+      await ctx.db.patch(args.loadId, { etaStatus: "unknown", deliveryRisk: "unknown" });
+      return { updated: true, etaStatus: "unknown" };
+    }
+
+    const truck = await ctx.db.get(load.truckId);
+    if (!truck) {
+      await ctx.db.patch(args.loadId, { etaStatus: "unknown", deliveryRisk: "unknown" });
+      return { updated: true, etaStatus: "unknown" };
+    }
+
+    // Get latest location from locationHistory using index
+    const latestLoc = await ctx.db
+      .query("locationHistory")
+      .withIndex("by_entity", (q) => q.eq("entityType", "truck").eq("entityId", load.truckId!))
+      .order("desc")
+      .first();
+
+    const truckLat = latestLoc?.lat ?? truck.lat;
+    const truckLng = latestLoc?.lon ?? truck.lon;
+    const gpsTime = latestLoc?.at ?? truck.lastLocationUpdateAt;
+
+    if (truckLat == null || truckLng == null) {
+      await ctx.db.patch(args.loadId, { etaStatus: "unknown", deliveryRisk: "unknown" });
+      return { updated: true, etaStatus: "unknown" };
+    }
+
+    // Check GPS freshness
+    const gpsAge = Date.now() - (gpsTime ?? 0);
+    const gpsStale = gpsAge > 30 * 60 * 1000; // 30 minutes
+
+    // Throttle: skip if ETA was calculated <5min ago AND GPS hasn't moved >0.5mi
+    if (load.etaUpdatedAt && load.eta != null && !gpsStale) {
+      const timeSinceLastCalc = Date.now() - load.etaUpdatedAt;
+      if (timeSinceLastCalc < 5 * 60 * 1000) {
+        return { updated: false, reason: "Recently calculated" };
+      }
+    }
+
+    // Haversine distance calculation (miles)
+    const R = 3958.8; // Earth radius in miles
+    const dLat = ((load.destinationLat - truckLat) * Math.PI) / 180;
+    const dLng = ((load.destinationLng - truckLng) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos((truckLat * Math.PI) / 180) * Math.cos((load.destinationLat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+    const distanceMiles = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    // Estimate duration: assume average 55 mph for trucking
+    const avgSpeedMph = 55;
+    const durationSeconds = Math.round((distanceMiles / avgSpeedMph) * 3600);
+    const etaTimestamp = Date.now() + durationSeconds * 1000;
+
+    // Determine delivery risk
+    let deliveryRisk: RiskStatus = "on_time";
+    let delayMinutes = 0;
+    if (load.deliveryDate) {
+      const deliveryDateMs = load.deliveryDate;
+      if (etaTimestamp > deliveryDateMs) {
+        delayMinutes = Math.round((etaTimestamp - deliveryDateMs) / 60000);
+        deliveryRisk = delayMinutes > 60 ? "delayed" : "at_risk";
+      }
+    }
+
+    // Determine pickup risk (only if status is At Pickup or before)
+    let pickupRisk: RiskStatus = "on_time";
+    if (["At Pickup"].includes(load.status) && load.pickupDate && load.originLat != null && load.originLng != null) {
+      const dLatP = ((load.originLat - truckLat) * Math.PI) / 180;
+      const dLngP = ((load.originLng - truckLng) * Math.PI) / 180;
+      const aP =
+        Math.sin(dLatP / 2) ** 2 +
+        Math.cos((truckLat * Math.PI) / 180) * Math.cos((load.originLat * Math.PI) / 180) * Math.sin(dLngP / 2) ** 2;
+      const pickupDistMiles = R * 2 * Math.atan2(Math.sqrt(aP), Math.sqrt(1 - aP));
+      const pickupEtaMs = Date.now() + (pickupDistMiles / avgSpeedMph) * 3600 * 1000;
+      if (pickupEtaMs > load.pickupDate) {
+        pickupRisk = "at_risk";
+        if (pickupEtaMs - load.pickupDate > 60 * 60 * 1000) pickupRisk = "delayed";
+      }
+    }
+
+    const etaStatus: RiskStatus = gpsStale ? "unknown" : deliveryRisk;
+
+    await ctx.db.patch(args.loadId, {
+      eta: etaTimestamp,
+      etaDistanceMiles: Math.round(distanceMiles * 10) / 10,
+      etaDurationSeconds: durationSeconds,
+      etaUpdatedAt: Date.now(),
+      etaStatus,
+      deliveryRisk,
+      pickupRisk,
+      delayMinutes,
+    });
+
+    return {
+      updated: true,
+      eta: etaTimestamp,
+      distanceMiles: Math.round(distanceMiles * 10) / 10,
+      durationSeconds,
+      etaStatus,
+      deliveryRisk,
+      pickupRisk,
+      delayMinutes,
+      gpsStale,
+    };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Live Trip Data (for LoadDetail and Driver Portal)
+// ---------------------------------------------------------------------------
+
+/** Get live trip data for a load: GPS, ETA, risk status. */
+export const getLoadLiveTrip = query({
+  args: { loadId: v.id("loads") },
+  handler: async (ctx, args) => {
+    const s = await requireOrg(ctx);
+    const load = await ctx.db.get(args.loadId);
+    if (!load || load.orgId !== s.orgId) throw new ConvexError("Load not found.");
+
+    const scope = loadScope(s);
+    if (scope.carrierId && load.carrierId !== scope.carrierId) throw new ConvexError("Load not found.");
+    if (scope.driverId && load.driverId !== scope.driverId) throw new ConvexError("Load not found.");
+
+    // Get truck and driver info
+    const truck = load.truckId ? await ctx.db.get(load.truckId) : null;
+    const driver = load.driverId ? await ctx.db.get(load.driverId) : null;
+
+    // Get latest GPS location for the truck
+    let latestLocation: { lat: number; lon: number; at: number; speed?: number; accuracy?: number } | null = null;
+    if (load.truckId) {
+      const loc = await ctx.db
+        .query("locationHistory")
+        .withIndex("by_entity", (q) => q.eq("entityType", "truck").eq("entityId", load.truckId!))
+        .order("desc")
+        .first();
+      if (loc) {
+        latestLocation = { lat: loc.lat, lon: loc.lon, at: loc.at, speed: loc.speed ?? undefined, accuracy: loc.accuracy ?? undefined };
+      } else if (truck && truck.lat != null && truck.lon != null) {
+        latestLocation = { lat: truck.lat, lon: truck.lon, at: truck._creationTime };
+      }
+    }
+
+    return {
+      load: {
+        _id: load._id,
+        loadNumber: load.loadNumber,
+        status: load.status,
+        origin: load.origin,
+        destination: load.destination,
+        pickupDate: load.pickupDate,
+        deliveryDate: load.deliveryDate,
+        offerStatus: load.offerStatus,
+        acceptedAt: load.acceptedAt,
+        rejectedAt: load.rejectedAt,
+        rejectionReason: load.rejectionReason,
+        eta: load.eta,
+        etaDistanceMiles: load.etaDistanceMiles,
+        etaDurationSeconds: load.etaDurationSeconds,
+        etaUpdatedAt: load.etaUpdatedAt,
+        etaStatus: load.etaStatus,
+        deliveryRisk: load.deliveryRisk,
+        pickupRisk: load.pickupRisk,
+        delayMinutes: load.delayMinutes,
+      },
+      truck: truck ? {
+        _id: truck._id,
+        unitNumber: truck.unitNumber,
+        type: truck.type,
+        availability: truck.availability,
+        trackingActive: truck.trackingActive ?? false,
+        lastLocationUpdateAt: truck.lastLocationUpdateAt,
+      } : null,
+      driver: driver ? {
+        _id: driver._id,
+        name: driver.name,
+        phone: driver.phone,
+        availability: driver.availability,
+      } : null,
+      latestLocation,
+    };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Get driver's pending load offers
+// ---------------------------------------------------------------------------
+
+/** Get loads assigned to the current driver that have pending or accepted offers. */
+export const getDriverOffers = query({
+  args: {},
+  handler: async (ctx) => {
+    const s = await requireOrg(ctx);
+    if (s.role !== "driver" || !s.driverId) return [];
+
+    let loads = await ctx.db
+      .query("loads")
+      .withIndex("by_org_driver", (q) => q.eq("orgId", s.orgId).eq("driverId", s.driverId))
+      .collect();
+
+    // Filter to non-terminal loads assigned to this driver
+    loads = loads.filter((l) => !TERMINAL_LOAD_STATUSES.includes(l.status as LoadStatus));
+
+    return loads;
   },
 });
 

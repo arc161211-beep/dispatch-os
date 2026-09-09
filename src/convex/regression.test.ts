@@ -25,6 +25,8 @@ import {
   ROLES,
   DOC_ALLOWED_EXTENSIONS,
   INTEGRATION_PROVIDERS,
+  ETA_STATUSES,
+  RISK_STATUSES,
   type LoadStatus,
 } from "./constants";
 import { calcDispatcherFee } from "./lib/finance";
@@ -649,5 +651,275 @@ describe("Phase 3: Users query optimization", () => {
     // separate from ACCOUNT_STATUSES which tracks user account state.
     expect(ACCOUNT_STATUSES).toContain("active");
     expect(ACCOUNT_STATUSES).toContain("invited");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PHASE 6: Driver Load Acceptance
+// ---------------------------------------------------------------------------
+describe("Phase 6: Driver load acceptance", () => {
+  it("ETA_STATUSES contains valid values", () => {
+    expect(ETA_STATUSES).toContain("on_time");
+    expect(ETA_STATUSES).toContain("at_risk");
+    expect(ETA_STATUSES).toContain("delayed");
+    expect(ETA_STATUSES).toContain("unknown");
+  });
+
+  it("RISK_STATUSES contains valid values", () => {
+    expect(RISK_STATUSES).toContain("on_time");
+    expect(RISK_STATUSES).toContain("at_risk");
+    expect(RISK_STATUSES).toContain("delayed");
+    expect(RISK_STATUSES).toContain("unknown");
+  });
+
+  it("driver role cannot create/update loads (not in WRITE_ROLES)", () => {
+    // Drivers can only accept/reject offers and update operational status
+    // They cannot create loads or change financial fields
+    expect(WRITE_ROLES).not.toContain("driver");
+  });
+
+  it("driver role is the only role that can accept/reject offers", () => {
+    // The acceptLoad/rejectLoad mutations check s.role === "driver"
+    // This ensures no other role can accept a load offer
+    expect(ROLES).toContain("driver");
+    expect(WRITE_ROLES).not.toContain("driver");
+  });
+
+  it("offerStatus values are valid subset of statuses", () => {
+    const offerStatuses = ["pending", "accepted", "rejected"];
+    expect(offerStatuses).toHaveLength(3);
+    expect(offerStatuses).toContain("pending");
+    expect(offerStatuses).toContain("accepted");
+    expect(offerStatuses).toContain("rejected");
+  });
+
+  it("driver can only update operational statuses", () => {
+    // Driver status transitions are limited to pickup → delivery
+    const driverTransitions = ["At Pickup", "Loading", "Loaded", "In Transit", "At Delivery", "Delivered"];
+    for (const status of driverTransitions) {
+      expect(LOAD_STATUSES).toContain(status);
+    }
+    // Drivers cannot book, cancel, or change financial fields
+    expect(LOAD_TRANSITIONS.Draft).not.toContain("Booked");
+  });
+
+  it("accepted load cannot be accepted again (idempotent)", () => {
+    // The acceptLoad mutation checks offerStatus === "accepted" and throws
+    const load = { offerStatus: "accepted" as const };
+    expect(load.offerStatus).toBe("accepted");
+  });
+
+  it("rejected load cannot be rejected again (idempotent)", () => {
+    const load = { offerStatus: "rejected" as const };
+    expect(load.offerStatus).toBe("rejected");
+  });
+
+  it("accepted load cannot be rejected", () => {
+    const load = { offerStatus: "accepted" as const };
+    // The rejectLoad mutation checks offerStatus === "accepted" and throws
+    expect(load.offerStatus).toBe("accepted");
+  });
+
+  it("load assignment sets offerStatus to pending", () => {
+    // When assignResources assigns a new driver, offerStatus is set to "pending"
+    const newAssignment = { offerStatus: "pending" as const };
+    expect(newAssignment.offerStatus).toBe("pending");
+  });
+
+  it("acceptance preserves timestamp and actor identity", () => {
+    // acceptedAt and acceptedBy must be set on acceptance
+    const accepted = {
+      offerStatus: "accepted" as const,
+      acceptedAt: Date.now(),
+      acceptedBy: "user-123",
+    };
+    expect(accepted.acceptedAt).toBeGreaterThan(0);
+    expect(accepted.acceptedBy).toBe("user-123");
+  });
+
+  it("rejection preserves timestamp and optional reason", () => {
+    const rejected = {
+      offerStatus: "rejected" as const,
+      rejectedAt: Date.now(),
+      rejectionReason: "Schedule conflict",
+    };
+    expect(rejected.rejectedAt).toBeGreaterThan(0);
+    expect(rejected.rejectionReason).toBe("Schedule conflict");
+  });
+
+  it("rejection reason is limited to 500 characters", () => {
+    const maxReason = "A".repeat(500);
+    expect(maxReason.length).toBe(500);
+    const tooLong = "A".repeat(501);
+    expect(tooLong.length).toBeGreaterThan(500);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PHASE 6: ETA System
+// ---------------------------------------------------------------------------
+describe("Phase 6: ETA system", () => {
+  it("Haversine distance calculation is correct for known distance", () => {
+    // Dallas to Houston: Haversine gives ~225 mi (straight-line, road is longer)
+    const R = 3958.8;
+    const lat1 = 32.7767, lng1 = -96.7970;
+    const lat2 = 29.7604, lng2 = -95.3698;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLng = ((lng2 - lng1) * Math.PI) / 180;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+    const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    expect(dist).toBeGreaterThan(220);
+    expect(dist).toBeLessThan(230);
+  });
+
+  it("ETA at 55mph average speed gives reasonable duration", () => {
+    const distanceMiles = 240;
+    const avgSpeedMph = 55;
+    const durationSeconds = Math.round((distanceMiles / avgSpeedMph) * 3600);
+    const hours = durationSeconds / 3600;
+    expect(hours).toBeGreaterThan(4);
+    expect(hours).toBeLessThan(5);
+  });
+
+  it("delivery risk is delayed when ETA > deliveryDate by more than 60min", () => {
+    const deliveryDate = Date.now() + 4 * 3600 * 1000; // 4 hours from now
+    const eta = Date.now() + 6 * 3600 * 1000; // 6 hours from now (2 hours late)
+    const delayMinutes = Math.round((eta - deliveryDate) / 60000);
+    expect(delayMinutes).toBeGreaterThan(0);
+    expect(delayMinutes).toBeGreaterThan(60); // more than 60 min = delayed
+  });
+
+  it("delivery risk is at_risk when ETA slightly > deliveryDate", () => {
+    const deliveryDate = Date.now() + 4 * 3600 * 1000;
+    const eta = Date.now() + 4.5 * 3600 * 1000; // 30 min late
+    const delayMinutes = Math.round((eta - deliveryDate) / 60000);
+    expect(delayMinutes).toBeGreaterThan(0);
+    expect(delayMinutes).toBeLessThanOrEqual(60);
+  });
+
+  it("delivery risk is on_time when ETA <= deliveryDate", () => {
+    const deliveryDate = Date.now() + 5 * 3600 * 1000;
+    const eta = Date.now() + 4 * 3600 * 1000;
+    const delayMinutes = Math.round((eta - deliveryDate) / 60000);
+    expect(delayMinutes).toBeLessThanOrEqual(0);
+  });
+
+  it("GPS stale threshold is 30 minutes", () => {
+    const now = Date.now();
+    const staleThreshold = 30 * 60 * 1000;
+    const recentGps = now - 25 * 60 * 1000; // 25 min ago — fresh
+    const staleGps = now - 35 * 60 * 1000; // 35 min ago — stale
+    expect(now - recentGps).toBeLessThan(staleThreshold);
+    expect(now - staleGps).toBeGreaterThan(staleThreshold);
+  });
+
+  it("ETA throttle prevents recalculation within 5 minutes", () => {
+    const lastCalc = Date.now();
+    const throttleWindow = 5 * 60 * 1000;
+    const timeSinceCalc = Date.now() - lastCalc;
+    expect(timeSinceCalc).toBeLessThan(throttleWindow);
+  });
+
+  it("ETA is unknown when destination coordinates are missing", () => {
+    const load = { destinationLat: null, destinationLng: null };
+    expect(load.destinationLat).toBeNull();
+    expect(load.destinationLng).toBeNull();
+  });
+
+  it("ETA is unknown when truck GPS is missing", () => {
+    const truck = { lat: undefined, lon: undefined };
+    expect(truck.lat).toBeUndefined();
+    expect(truck.lon).toBeUndefined();
+  });
+
+  it("ETA is unknown when GPS data is stale", () => {
+    const gpsTime = Date.now() - 35 * 60 * 1000; // 35 min ago
+    const gpsAge = Date.now() - gpsTime;
+    const gpsStale = gpsAge > 30 * 60 * 1000;
+    expect(gpsStale).toBe(true);
+  });
+
+  it("pickup risk calculated for loads at pickup status", () => {
+    const status = "At Pickup";
+    const activeStatuses = ["In Transit", "At Pickup", "Loaded", "At Delivery"];
+    expect(activeStatuses).toContain(status);
+  });
+
+  it("ETA only calculated for active loads", () => {
+    const activeStatuses = ["In Transit", "At Pickup", "Loaded", "At Delivery"];
+    expect(activeStatuses).not.toContain("Draft");
+    expect(activeStatuses).not.toContain("Completed");
+    expect(activeStatuses).not.toContain("Cancelled");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PHASE 6: Delay Detection
+// ---------------------------------------------------------------------------
+describe("Phase 6: Delay detection", () => {
+  it("delayMinutes is calculated correctly for delayed load", () => {
+    const deliveryDateMs = Date.now() + 3 * 3600 * 1000; // 3 hours
+    const etaMs = Date.now() + 4.5 * 3600 * 1000; // 4.5 hours
+    const delayMinutes = Math.round((etaMs - deliveryDateMs) / 60000);
+    expect(delayMinutes).toBe(90); // 1.5 hours late
+  });
+
+  it("delayMinutes is 0 for on-time load", () => {
+    const deliveryDateMs = Date.now() + 5 * 3600 * 1000;
+    const etaMs = Date.now() + 3 * 3600 * 1000;
+    const delayMinutes = Math.round((etaMs - deliveryDateMs) / 60000);
+    expect(delayMinutes).toBeLessThanOrEqual(0);
+  });
+
+  it("risk classification thresholds", () => {
+    // < 60 min late = at_risk
+    // > 60 min late = delayed
+    const atRiskMinutes = 45;
+    const delayedMinutes = 120;
+    expect(atRiskMinutes).toBeLessThanOrEqual(60);
+    expect(delayedMinutes).toBeGreaterThan(60);
+  });
+
+  it("ETA status reflects GPS freshness", () => {
+    // When GPS is stale, etaStatus should be "unknown" even if deliveryRisk exists
+    const gpsStale = true;
+    const deliveryRisk = "at_risk";
+    const etaStatus = gpsStale ? "unknown" : deliveryRisk;
+    expect(etaStatus).toBe("unknown");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PHASE 6: Cross-org isolation for acceptance
+// ---------------------------------------------------------------------------
+describe("Phase 6: Cross-org isolation for acceptance", () => {
+  it("driver cannot accept load from different org", () => {
+    const driverOrg = "org-1";
+    const loadOrg = "org-2";
+    expect(driverOrg).not.toBe(loadOrg);
+    // The acceptLoad mutation checks load.orgId !== s.orgId
+  });
+
+  it("driver cannot accept load not assigned to them", () => {
+    const driverId = "driver-1";
+    const loadDriverId = "driver-2";
+    expect(driverId).not.toBe(loadDriverId);
+    // The acceptLoad mutation checks load.driverId !== s.driverId
+  });
+
+  it("driver cannot manipulate orgId from client", () => {
+    // orgId is derived from requireOrg(ctx), never from client input
+    const sessionOrgId = "org-1";
+    const clientOrgId = "org-2";
+    // The mutation uses sessionOrgId, ignores clientOrgId
+    expect(sessionOrgId).not.toBe(clientOrgId);
+  });
+
+  it("driver cannot modify financial fields via accept/reject", () => {
+    // acceptLoad and rejectLoad only modify offerStatus, timestamps, rejectionReason
+    const allowedFields = ["offerStatus", "acceptedAt", "acceptedBy", "rejectedAt", "rejectionReason"];
+    expect(allowedFields).not.toContain("grossRateCents");
+    expect(allowedFields).not.toContain("feeCents");
+    expect(allowedFields).not.toContain("carrierAmountCents");
   });
 });

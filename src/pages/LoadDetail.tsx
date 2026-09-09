@@ -17,6 +17,7 @@ import { fmtDate, fmtDateTime, fmtRelative } from "@/lib/dates";
 import { ArrowLeft, FileText, Package, Truck, UserRound, Clock, Route, Wallet, MapPin, ChevronRight, Globe, Loader2 } from "lucide-react";
 import { WeatherCard, RouteWeather } from "@/components/app/WeatherCard";
 import type { Id } from "@/convex/_generated/dataModel";
+import { Timer, CheckCircle2, AlertTriangle } from "lucide-react";
 
 const STATUS_INDEX = LOAD_STATUSES.reduce((acc, s, i) => ({ ...acc, [s]: i }), {} as Record<string, number>);
 
@@ -35,6 +36,8 @@ export default function LoadDetail() {
   const assignResources = useMutation(api.loads.assignResources);
   const remove = useMutation(api.loads.remove);
   const geocodeLoad = useAction(api.geocoding.geocodeLoad);
+  const liveTrip = useQuery(api.loads.getLoadLiveTrip, { loadId: id as Id<"loads"> });
+  const calculateETA = useMutation(api.loads.calculateETA);
   const [geocoding, setGeocoding] = useState(false);
 
   const [statusDialog, setStatusDialog] = useState<string | null>(null);
@@ -70,6 +73,14 @@ export default function LoadDetail() {
 
   const handleDelete = async () => {
     try { await remove({ id: l._id as any }); toast.success("Load deleted."); navigate("/loads"); } catch (e) { toast.error(errorMessage(e)); }
+  };
+
+  const handleCalculateETA = async () => {
+    try {
+      await calculateETA({ loadId: l._id as any });
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
   };
 
   const handleGeocode = async () => {
@@ -202,6 +213,82 @@ export default function LoadDetail() {
           )}
         </div>
       </motion.div>
+
+      {/* ═══════════ LIVE TRIP SECTION ═══════════ */}
+      {liveTrip && liveTrip.truck && ["In Transit", "At Pickup", "Loaded", "At Delivery"].includes(l.status) && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="rounded-2xl border border-border/50 bg-card overflow-hidden"
+        >
+          <div className="bg-electric/5 border-b border-electric/10 px-4 py-2.5 flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-electric">Live Trip</span>
+            <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={handleCalculateETA}>
+              <Timer className="size-3 mr-1" /> Refresh ETA
+            </Button>
+          </div>
+          <div className="p-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Driver</p>
+                <p className="text-sm font-semibold">{liveTrip.driver?.name ?? "—"}</p>
+                <p className="text-[10px] text-muted-foreground">Truck: {liveTrip.truck.unitNumber}</p>
+              </div>
+              <div>
+                <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Current Location</p>
+                {liveTrip.latestLocation ? (
+                  <>
+                    <p className="text-sm font-semibold">{liveTrip.latestLocation.lat.toFixed(4)}, {liveTrip.latestLocation.lon.toFixed(4)}</p>
+                    <p className="text-[10px] text-muted-foreground">Updated {fmtRelative(liveTrip.latestLocation.at)}</p>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No GPS data</p>
+                )}
+              </div>
+              <div>
+                <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">ETA</p>
+                {liveTrip.load.eta ? (
+                  <>
+                    <p className="text-sm font-semibold">
+                      {new Date(liveTrip.load.eta).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {liveTrip.load.etaDistanceMiles ?? "—"} mi · {liveTrip.load.etaDurationSeconds ? `${Math.floor(liveTrip.load.etaDurationSeconds / 3600)}h ${Math.round((liveTrip.load.etaDurationSeconds % 3600) / 60)}m` : "—"}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">—</p>
+                )}
+              </div>
+              <div>
+                <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Status</p>
+                {liveTrip.load.deliveryRisk === "delayed" ? (
+                  <div className="flex items-center gap-1.5">
+                    <AlertTriangle className="size-3.5 text-[#EF4444]" />
+                    <span className="text-sm font-semibold text-[#EF4444]">DELAYED</span>
+                  </div>
+                ) : liveTrip.load.deliveryRisk === "at_risk" ? (
+                  <div className="flex items-center gap-1.5">
+                    <AlertTriangle className="size-3.5 text-[#F5A623]" />
+                    <span className="text-sm font-semibold text-[#F5A623]">AT RISK</span>
+                  </div>
+                ) : liveTrip.load.deliveryRisk === "on_time" ? (
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle2 className="size-3.5 text-[#22C55E]" />
+                    <span className="text-sm font-semibold text-[#22C55E]">ON TIME</span>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Unknown</p>
+                )}
+                {liveTrip.load.delayMinutes != null && liveTrip.load.delayMinutes > 0 && (
+                  <p className="text-[10px] text-[#EF4444]">{liveTrip.load.delayMinutes} min late</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       <Tabs defaultValue="overview">
         <TabsList>
