@@ -55,6 +55,9 @@ const TOOLS: ToolDef[] = [
   { name: "explainDelay", description: "Explain why a load is delayed or at risk, using GPS, ETA, and route data.", params: { type: "object", properties: { loadId: { type: "string" } }, required: ["loadId"] } },
   { name: "getLoadSettlement", description: "Get the financial settlement breakdown for a load: gross rate, dispatcher fee, carrier amount, RPM.", params: { type: "object", properties: { loadId: { type: "string" } }, required: ["loadId"] } },
   { name: "getMissingDocs", description: "Check which documents are missing for a load (rate confirmation, BOL, POD, invoice).", params: { type: "object", properties: { loadId: { type: "string" } }, required: ["loadId"] } },
+  { name: "getAttentionItems", description: "Get prioritized list of items requiring dispatcher attention (delayed loads, stale GPS, pending offers, etc.).", params: { type: "object", properties: {} } },
+  { name: "operationalSummary", description: "Get structured daily operational summary with key metrics.", params: { type: "object", properties: {} } },
+  { name: "recommendTruck", description: "Recommend the best truck for a specific load, with reasons and match score.", params: { type: "object", properties: { loadId: { type: "string" } }, required: ["loadId"] } },
 ];
 
 async function aiConfig() {
@@ -264,6 +267,44 @@ async function runTool(ctx: any, name: string, args: Record<string, unknown>, se
           total: checklist.length,
           received: checklist.length - missing.length,
           missing: missing.map((c: any) => c.type),
+        }),
+      };
+    }
+    case "getAttentionItems": {
+      const items = await ctx.runQuery(api.dashboard.getAttentionItems, {});
+      return {
+        ok: true,
+        summary: JSON.stringify(items.slice(0, 20).map((item: any) => ({
+          severity: item.severity,
+          category: item.category,
+          title: item.title,
+          description: item.description,
+        }))),
+      };
+    }
+    case "operationalSummary": {
+      const summary = await ctx.runQuery(api.dashboard.getOperationalSummary, {});
+      return { ok: true, summary: JSON.stringify(summary.summary) };
+    }
+    case "recommendTruck": {
+      const rows = await ctx.runQuery(api.matching.matchTrucks, { loadId: args.loadId as string });
+      const best = rows[0];
+      if (!best) return { ok: true, summary: "No matching trucks found." };
+      return {
+        ok: true,
+        summary: JSON.stringify({
+          recommendation: best.match.tier,
+          score: best.match.score,
+          truck: best.unitNumber,
+          driver: best.driverName,
+          location: best.currentLocation,
+          reasons: best.match.reasons,
+          concerns: best.match.concerns,
+          alternatives: rows.slice(1, 3).map((r: any) => ({
+            truck: r.unitNumber,
+            score: r.match.score,
+            tier: r.match.tier,
+          })),
         }),
       };
     }

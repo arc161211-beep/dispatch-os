@@ -213,3 +213,294 @@ export const summary = query({
     };
   },
 });
+
+// ---------------------------------------------------------------------------
+// PHASE 8: Attention Items with Severity Levels
+//
+// Returns a prioritized list of items requiring dispatcher attention.
+// Each item has a severity (critical/high/medium/low), category, title,
+// description, link, and timestamp. The UI can render these as a prioritized
+// work queue.
+// ---------------------------------------------------------------------------
+
+interface AttentionItem {
+  severity: "critical" | "high" | "medium" | "low";
+  category: string;
+  title: string;
+  description: string;
+  link?: string;
+  entityType?: string;
+  entityId?: string;
+  timestamp: number;
+}
+
+export const getAttentionItems = query({
+  args: {},
+  handler: async (ctx) => {
+    const s = await requireOrg(ctx);
+    const scope = loadScope(s);
+    const settings = await ctx.db.query("settings").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).first();
+    const tz = settings?.timezone ?? "UTC";
+    const now = Date.now();
+    const today = tzToday(tz);
+    const items: AttentionItem[] = [];
+
+    // Bounded queries
+    const [loads, trucks, tasks, invoices] = await Promise.all([
+      ctx.db.query("loads").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).take(BOUNDED),
+      ctx.db.query("trucks").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).take(BOUNDED),
+      ctx.db.query("tasks").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).take(BOUNDED),
+      ctx.db.query("invoices").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).take(BOUNDED),
+    ]);
+
+    // Scope by carrier/driver
+    let scopedLoads = loads;
+    let scopedTrucks = trucks;
+    if (scope.carrierId) {
+      scopedLoads = loads.filter((l) => l.carrierId === scope.carrierId);
+      scopedTrucks = trucks.filter((t) => t.carrierId === scope.carrierId);
+    }
+    if (scope.driverId) {
+      scopedLoads = scopedLoads.filter((l) => l.driverId === scope.driverId);
+    }
+
+    const activeLoads = scopedLoads.filter((l) => !TERMINAL_LOAD_STATUSES.includes(l.status as LoadStatus));
+
+    // === CRITICAL: Delayed loads ===
+    for (const load of activeLoads.filter((l) => l.deliveryRisk === "delayed")) {
+      items.push({
+        severity: "critical",
+        category: "delayed_load",
+        title: `Load ${load.loadNumber} is DELAYED`,
+        description: `Estimated ${load.delayMinutes ?? 0} min late. Required: ${load.deliveryDate ? new Date(load.deliveryDate).toLocaleString() : "unknown"}`,
+        link: `/loads/${load._id}`,
+        entityType: "load",
+        entityId: load._id,
+        timestamp: load.etaUpdatedAt ?? now,
+      });
+    }
+
+    // === CRITICAL: Overdue invoices ===
+    for (const inv of invoices.filter((i) => !["Paid", "Cancelled"].includes(i.status) && i.dueDate && i.dueDate < now)) {
+      items.push({
+        severity: "critical",
+        category: "overdue_invoice",
+        title: `Invoice overdue: ${inv.invoiceNumber}`,
+        description: `$${((inv.amountCents - inv.paidCents) / 100).toFixed(2)} outstanding. Due: ${new Date(inv.dueDate!).toLocaleDateString()}`,
+        link: `/finance`,
+        entityType: "invoice",
+        entityId: inv._id,
+        timestamp: inv.dueDate!,
+      });
+    }
+
+    // === HIGH: At-risk loads ===
+    for (const load of activeLoads.filter((l) => l.deliveryRisk === "at_risk")) {
+      items.push({
+        severity: "high",
+        category: "at_risk_load",
+        title: `Load ${load.loadNumber} at risk of being late`,
+        description: `ETA: ${load.eta ? new Date(load.eta).toLocaleString() : "unknown"}. Required: ${load.deliveryDate ? new Date(load.deliveryDate).toLocaleString() : "unknown"}`,
+        link: `/loads/${load._id}`,
+        entityType: "load",
+        entityId: load._id,
+        timestamp: load.etaUpdatedAt ?? now,
+      });
+    }
+
+    // === HIGH: Stale GPS on active/transit loads ===
+    for (const truck of scopedTrucks.filter((t) => t.trackingActive && t.lastLocationUpdateAt && now - t.lastLocationUpdateAt > 30 * 60 * 1000)) {
+      const staleMinutes = Math.round((now - (truck.lastLocationUpdateAt ?? 0)) / 60000);
+      const linkedLoad = activeLoads.find((l) => l.truckId === truck._id);
+      items.push({
+        severity: "high",
+        category: "stale_gps",
+        title: `Truck ${truck.unitNumber} GPS stale`,
+        description: `Last update ${staleMinutes} min ago${linkedLoad ? `. Active load: ${linkedLoad.loadNumber}` : ""}`,
+        link: `/trucks/${truck._id}`,
+        entityType: "truck",
+        entityId: truck._id,
+        timestamp: truck.lastLocationUpdateAt ?? 0,
+      });
+    }
+
+    // === HIGH: Missing POD after delivery ===
+    const deliveredLoads = scopedLoads.filter((l) => ["Delivered", "POD Pending"].includes(l.status)).slice(0, 20);
+    for (const load of deliveredLoads) {
+      const docs = await ctx.db.query("documents")
+        .withIndex("by_org_entity", (q) => q.eq("orgId", s.orgId).eq("entityType", "load").eq("entityId", load._id))
+        .take(10);
+      if (!docs.some((d) => d.type === "POD")) {
+        items.push({
+          severity: "high",
+          category: "missing_pod",
+          title: `POD missing for ${load.loadNumber}`,
+          description: `Load delivered but no proof of delivery on file.`,
+          link: `/loads/${load._id}`,
+          entityType: "load",
+          entityId: load._id,
+          timestamp: load._creationTime,
+        });
+      }
+    }
+
+    // === MEDIUM: Pending driver offers ===
+    for (const load of activeLoads.filter((l) => l.offerStatus === "pending")) {
+      items.push({
+        severity: "medium",
+        category: "pending_offer",
+        title: `Offer pending: ${load.loadNumber}`,
+        description: `${load.origin ?? "?"} → ${load.destination ?? "?"}. Awaiting driver acceptance.`,
+        link: `/loads/${load._id}`,
+        entityType: "load",
+        entityId: load._id,
+        timestamp: load._creationTime,
+      });
+    }
+
+    // === MEDIUM: Upcoming pickups (within 24h) ===
+    for (const load of activeLoads.filter((l) =>
+      l.pickupDate && l.pickupDate >= now && l.pickupDate <= now + DAY
+    ).sort((a, b) => (a.pickupDate ?? 0) - (b.pickupDate ?? 0)).slice(0, 10)) {
+      const hoursUntil = Math.round(((load.pickupDate ?? 0) - now) / 3600000);
+      items.push({
+        severity: "medium",
+        category: "upcoming_pickup",
+        title: `Pickup in ${hoursUntil}h: ${load.loadNumber}`,
+        description: `${load.origin ?? "?"} at ${load.pickupDate ? new Date(load.pickupDate).toLocaleTimeString() : "?"}`,
+        link: `/loads/${load._id}`,
+        entityType: "load",
+        entityId: load._id,
+        timestamp: load.pickupDate!,
+      });
+    }
+
+    // === MEDIUM: Overdue tasks ===
+    for (const task of tasks.filter((t) => t.status === "Pending" && t.dueAt && t.dueAt < now)) {
+      items.push({
+        severity: "medium",
+        category: "overdue_task",
+        title: `Overdue task: ${task.title}`,
+        description: `Due: ${task.dueAt ? new Date(task.dueAt).toLocaleString() : "unknown"}`,
+        entityType: "task",
+        entityId: task._id,
+        timestamp: task.dueAt ?? task._creationTime,
+      });
+    }
+
+    // === LOW: Upcoming deliveries (24–48h) ===
+    for (const load of activeLoads.filter((l) =>
+      l.deliveryDate && l.deliveryDate > now + DAY && l.deliveryDate <= now + 2 * DAY
+    ).sort((a, b) => (a.deliveryDate ?? 0) - (b.deliveryDate ?? 0)).slice(0, 5)) {
+      const hoursUntil = Math.round(((load.deliveryDate ?? 0) - now) / 3600000);
+      items.push({
+        severity: "low",
+        category: "upcoming_delivery",
+        title: `Delivery in ${hoursUntil}h: ${load.loadNumber}`,
+        description: `${load.destination ?? "?"} at ${load.deliveryDate ? new Date(load.deliveryDate).toLocaleTimeString() : "?"}`,
+        link: `/loads/${load._id}`,
+        entityType: "load",
+        entityId: load._id,
+        timestamp: load.deliveryDate!,
+      });
+    }
+
+    // === LOW: Trucks needing loads ===
+    const trucksWithLoad = new Set(activeLoads.filter((l) => l.truckId).map((l) => l.truckId));
+    const idleTrucks = scopedTrucks.filter((t) => t.availability === "Available" && !trucksWithLoad.has(t._id));
+    if (idleTrucks.length > 0) {
+      items.push({
+        severity: "low",
+        category: "idle_trucks",
+        title: `${idleTrucks.length} truck${idleTrucks.length === 1 ? "" : "s"} without loads`,
+        description: "Available trucks could be assigned to new loads.",
+        link: `/trucks`,
+        timestamp: now,
+      });
+    }
+
+    // Sort by severity (critical first) then by timestamp (newest first)
+    const severityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+    items.sort((a, b) => {
+      const sv = severityOrder[a.severity] - severityOrder[b.severity];
+      if (sv !== 0) return sv;
+      return b.timestamp - a.timestamp;
+    });
+
+    return items;
+  },
+});
+
+// ---------------------------------------------------------------------------
+// PHASE 8: Daily Operational Summary
+//
+// Returns a structured summary of today's operations for display in the
+// dashboard or for AI consumption. Includes all key operational metrics.
+// ---------------------------------------------------------------------------
+
+export const getOperationalSummary = query({
+  args: {},
+  handler: async (ctx) => {
+    const s = await requireOrg(ctx);
+    const scope = loadScope(s);
+    const settings = await ctx.db.query("settings").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).first();
+    const tz = settings?.timezone ?? "UTC";
+    const now = Date.now();
+    const today = tzToday(tz);
+
+    const [loads, trucks, drivers] = await Promise.all([
+      ctx.db.query("loads").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).take(BOUNDED),
+      ctx.db.query("trucks").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).take(BOUNDED),
+      ctx.db.query("drivers").withIndex("by_org", (q) => q.eq("orgId", s.orgId)).take(BOUNDED),
+    ]);
+
+    // Scope
+    let scopedLoads = loads;
+    let scopedTrucks = trucks;
+    let scopedDrivers = drivers;
+    if (scope.carrierId) {
+      scopedLoads = loads.filter((l) => l.carrierId === scope.carrierId);
+      scopedTrucks = trucks.filter((t) => t.carrierId === scope.carrierId);
+      scopedDrivers = drivers.filter((d) => d.carrierId === scope.carrierId);
+    }
+    if (scope.driverId) {
+      scopedLoads = scopedLoads.filter((l) => l.driverId === scope.driverId);
+    }
+
+    const activeLoads = scopedLoads.filter((l) => !TERMINAL_LOAD_STATUSES.includes(l.status as LoadStatus));
+    const inTransit = scopedLoads.filter((l) => ["In Transit", "At Delivery"].includes(l.status));
+    const completedToday = scopedLoads.filter((l) =>
+      ["Delivered", "Completed"].includes(l.status) &&
+      l._creationTime >= today.start && l._creationTime < today.end
+    );
+
+    const delayedLoads = activeLoads.filter((l) => l.deliveryRisk === "delayed");
+    const atRiskLoads = activeLoads.filter((l) => l.deliveryRisk === "at_risk");
+    const pendingOffers = activeLoads.filter((l) => l.offerStatus === "pending");
+    const staleGpsTrucks = scopedTrucks.filter((t) =>
+      t.trackingActive && t.lastLocationUpdateAt && now - t.lastLocationUpdateAt > 30 * 60 * 1000
+    );
+
+    return {
+      timestamp: now,
+      timezone: tz,
+      summary: {
+        activeLoads: activeLoads.length,
+        inTransit: inTransit.length,
+        completedToday: completedToday.length,
+        delayedLoads: delayedLoads.length,
+        atRiskLoads: atRiskLoads.length,
+        pendingOffers: pendingOffers.length,
+        totalTrucks: scopedTrucks.length,
+        availableTrucks: scopedTrucks.filter((t) => t.availability === "Available").length,
+        totalDrivers: scopedDrivers.length,
+        availableDrivers: scopedDrivers.filter((d) => d.availability === "Available").length,
+        staleGpsTrucks: staleGpsTrucks.length,
+      },
+      delayedLoadNumbers: delayedLoads.map((l) => l.loadNumber),
+      atRiskLoadNumbers: atRiskLoads.map((l) => l.loadNumber),
+      pendingOfferNumbers: pendingOffers.map((l) => l.loadNumber),
+      staleGpsTruckNumbers: staleGpsTrucks.map((t) => t.unitNumber),
+    };
+  },
+});

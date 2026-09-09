@@ -65,6 +65,20 @@ export async function notify(
     }
   }
 
+  // Deduplication: check for an existing unread notification with the same title
+  // within the last 10 minutes. This prevents notification spam from repeated GPS
+  // updates triggering the same risk conditions.
+  const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
+  const recentDup = await ctx.db
+    .query("notifications")
+    .withIndex("by_org_user", (q) => q.eq("orgId", s.orgId).eq("userId", s.userId))
+    .order("desc")
+    .take(20);
+  const isDuplicate = recentDup.some(
+    (existing) => !existing.readAt && existing.title === n.title && existing._creationTime > tenMinutesAgo,
+  );
+  if (isDuplicate) return; // Skip duplicate notification
+
   await ctx.db.insert("notifications", {
     orgId: s.orgId as never,
     userId: s.userId as never,

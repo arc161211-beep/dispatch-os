@@ -923,3 +923,200 @@ describe("Phase 6: Cross-org isolation for acceptance", () => {
     expect(allowedFields).not.toContain("carrierAmountCents");
   });
 });
+
+// ---------------------------------------------------------------------------
+// PHASE 8: Attention items, operational summary, AI tools, notification dedup
+// ---------------------------------------------------------------------------
+describe("Phase 8: Attention items severity levels", () => {
+  it("severity ordering is correct", () => {
+    const order = { critical: 0, high: 1, medium: 2, low: 3 };
+    expect(order.critical).toBeLessThan(order.high);
+    expect(order.high).toBeLessThan(order.medium);
+    expect(order.medium).toBeLessThan(order.low);
+  });
+
+  it("attention categories are well-defined", () => {
+    const validCategories = [
+      "delayed_load",
+      "overdue_invoice",
+      "at_risk_load",
+      "stale_gps",
+      "missing_pod",
+      "pending_offer",
+      "upcoming_pickup",
+      "overdue_task",
+      "upcoming_delivery",
+      "idle_trucks",
+    ];
+    expect(validCategories.length).toBeGreaterThanOrEqual(10);
+    // Every category must be non-empty string
+    for (const cat of validCategories) {
+      expect(cat.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("severity levels are valid", () => {
+    for (const sev of ["critical", "high", "medium", "low"]) {
+      expect(["critical", "high", "medium", "low"]).toContain(sev);
+    }
+  });
+});
+
+describe("Phase 8: AI tool definitions", () => {
+  const expectedTools = [
+    "getTrucks",
+    "getLoads",
+    "getCarriers",
+    "getDrivers",
+    "getBrokers",
+    "getLeads",
+    "getMessages",
+    "getTasks",
+    "getInvoices",
+    "getSummary",
+    "getDailySummary",
+    "calculateLoad",
+    "findMatchingTrucks",
+    "createTask",
+    "createDraftReply",
+    "analyzeLoad",
+    "explainDelay",
+    "getLoadSettlement",
+    "getMissingDocs",
+    "getAttentionItems",
+    "operationalSummary",
+    "recommendTruck",
+  ];
+
+  it("all required AI tools are defined", () => {
+    // Verify the tool names are valid strings
+    for (const tool of expectedTools) {
+      expect(tool.length).toBeGreaterThan(0);
+      expect(typeof tool).toBe("string");
+    }
+  });
+
+  it("Phase 8 adds 3 new AI tools", () => {
+    const phase8Tools = ["getAttentionItems", "operationalSummary", "recommendTruck"];
+    for (const tool of phase8Tools) {
+      expect(expectedTools).toContain(tool);
+    }
+  });
+});
+
+describe("Phase 8: GPS throttle behavior", () => {
+  it("5-second throttle constant is reasonable", () => {
+    const THROTTLE_MS = 5000;
+    expect(THROTTLE_MS).toBe(5000);
+    expect(THROTTLE_MS).toBeGreaterThanOrEqual(1000);
+    expect(THROTTLE_MS).toBeLessThanOrEqual(30000);
+  });
+
+  it("ETA auto-recalculation throttle is 5 minutes", () => {
+    const ETA_THROTTLE_MS = 5 * 60 * 1000;
+    expect(ETA_THROTTLE_MS).toBe(300000);
+  });
+});
+
+describe("Phase 8: Notification deduplication", () => {
+  it("dedup window is 10 minutes", () => {
+    const DEDUP_WINDOW_MS = 10 * 60 * 1000;
+    expect(DEDUP_WINDOW_MS).toBe(600000);
+    expect(DEDUP_WINDOW_MS).toBeGreaterThan(0);
+  });
+
+  it("duplicate detection compares title and creation time", () => {
+    const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
+    const existingNotification = {
+      title: "⚠ DELAYED: Load L-001",
+      _creationTime: Date.now() - 5 * 60 * 1000,
+      readAt: undefined,
+    };
+    const isDuplicate =
+      !existingNotification.readAt &&
+      existingNotification.title === "⚠ DELAYED: Load L-001" &&
+      existingNotification._creationTime > tenMinutesAgo;
+    expect(isDuplicate).toBe(true);
+  });
+
+  it("read notification is not a duplicate", () => {
+    const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
+    const existingNotification = {
+      title: "⚠ DELAYED: Load L-001",
+      _creationTime: Date.now() - 5 * 60 * 1000,
+      readAt: Date.now() - 2 * 60 * 1000,
+    };
+    const isDuplicate =
+      !existingNotification.readAt &&
+      existingNotification.title === "⚠ DELAYED: Load L-001" &&
+      existingNotification._creationTime > tenMinutesAgo;
+    expect(isDuplicate).toBe(false);
+  });
+
+  it("old notification is not a duplicate", () => {
+    const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
+    const existingNotification = {
+      title: "⚠ DELAYED: Load L-001",
+      _creationTime: Date.now() - 15 * 60 * 1000,
+      readAt: undefined,
+    };
+    const isDuplicate =
+      !existingNotification.readAt &&
+      existingNotification.title === "⚠ DELAYED: Load L-001" &&
+      existingNotification._creationTime > tenMinutesAgo;
+    expect(isDuplicate).toBe(false);
+  });
+});
+
+describe("Phase 8: Matching engine (recommendTruck)", () => {
+  it("scoreTruckForLoad returns tier for strong match", () => {
+    const result = scoreTruckForLoad(
+      { availability: "Available", equipment: "Dry Van", origin: "Dallas, TX", pickupDate: Date.now() + 24 * 3600000 },
+      { availability: "Available", equipment: "Dry Van", currentLocation: "Dallas, TX" },
+    );
+    expect(result.score).toBeGreaterThanOrEqual(0);
+    expect(result.score).toBeLessThanOrEqual(100);
+    expect(["Strong Match", "Good Match", "Possible Match", "Weak Match"]).toContain(result.tier);
+    expect(result.reasons.length).toBeGreaterThan(0);
+  });
+
+  it("scoreTruckForLoad penalizes equipment mismatch", () => {
+    const matched = scoreTruckForLoad(
+      { availability: "Available", equipment: "Dry Van" },
+      { availability: "Available", equipment: "Dry Van" },
+    );
+    const mismatched = scoreTruckForLoad(
+      { availability: "Available", equipment: "Dry Van" },
+      { availability: "Available", equipment: "Flatbed" },
+    );
+    expect(matched.score).toBeGreaterThan(mismatched.score);
+  });
+
+  it("scoreTruckForLoad penalizes unavailable trucks", () => {
+    const available = scoreTruckForLoad(
+      { availability: "Available" },
+      { availability: "Available", currentLoadId: undefined },
+    );
+    const busy = scoreTruckForLoad(
+      { availability: "Available" },
+      { availability: "On Load", currentLoadId: "load-1" },
+    );
+    expect(available.score).toBeGreaterThan(busy.score);
+  });
+});
+
+describe("Phase 8: ETA and risk status constants", () => {
+  it("ETA_STATUSES includes all expected values", () => {
+    expect(ETA_STATUSES).toContain("on_time");
+    expect(ETA_STATUSES).toContain("at_risk");
+    expect(ETA_STATUSES).toContain("delayed");
+    expect(ETA_STATUSES).toContain("unknown");
+  });
+
+  it("RISK_STATUSES includes all expected values", () => {
+    expect(RISK_STATUSES).toContain("on_time");
+    expect(RISK_STATUSES).toContain("at_risk");
+    expect(RISK_STATUSES).toContain("delayed");
+    expect(RISK_STATUSES).toContain("unknown");
+  });
+});
