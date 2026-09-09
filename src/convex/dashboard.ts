@@ -103,6 +103,12 @@ export const summary = query({
     const expiringCarriers = carriers.filter((c) => c.insuranceExpiry && c.insuranceExpiry > now && c.insuranceExpiry < now + 30 * DAY);
     const expiringDrivers = drivers.filter((d) => (d.licenseExpiry && d.licenseExpiry < now + 30 * DAY) || (d.medicalCardExpiry && d.medicalCardExpiry < now + 30 * DAY));
 
+    // PHASE 7: At-risk and delayed loads for attention indicators
+    const atRiskLoads = activeLoads.filter((l) => l.deliveryRisk === "at_risk").slice(0, 5);
+    const delayedLoadsAtRisk = activeLoads.filter((l) => l.deliveryRisk === "delayed").slice(0, 5);
+    const staleGpsTrucks = trucks.filter((t) => t.trackingActive && t.lastLocationUpdateAt && now - t.lastLocationUpdateAt > 30 * 60 * 1000).slice(0, 5);
+    const pendingOffers = activeLoads.filter((l) => l.offerStatus === "pending").slice(0, 5);
+
     const dailySummaryText = [
       `${activeLoads.length} active load${activeLoads.length === 1 ? "" : "s"}`,
       `${inTransit.length} in transit`,
@@ -184,6 +190,10 @@ export const summary = query({
       attention: {
         urgentMessages,
         missingPod,
+        atRiskLoads,
+        delayedLoads: delayedLoadsAtRisk,
+        staleGpsTrucks,
+        pendingOffers,
         upcomingPickups,
         upcomingDeliveries,
         overdueTasks,

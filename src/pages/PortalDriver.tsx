@@ -35,6 +35,7 @@ import {
   XCircle,
   Timer,
   Route,
+  ClipboardList,
 } from "lucide-react";
 
 type LoadType = any;
@@ -106,6 +107,8 @@ export default function PortalDriver() {
   const pendingOffers = (driverOffers ?? []).filter((l: LoadType) => l.offerStatus === "pending");
   const acceptedLoads = (driverOffers ?? []).filter((l: LoadType) => l.offerStatus === "accepted" && l._id !== activeLoad?._id);
   const upcomingLoads = myLoads.filter((l: LoadType) => l._id !== activeLoad?._id && l.offerStatus !== "pending" && l.offerStatus !== "rejected");
+
+  const docChecklist = useQuery(api.documents.checklist, activeLoad ? { loadId: activeLoad._id } : "skip");
 
   const handleStatus = async (loadId: string, status: string) => {
     setUpdating(loadId);
@@ -724,6 +727,29 @@ export default function PortalDriver() {
                   <span className="text-muted-foreground">Location sharing has not started. Tap "Start Sharing Location" above.</span>
                 </div>
               ) : null}
+
+              {/* Document Checklist */}
+              {docChecklist && docChecklist.length > 0 && (
+                <div className="rounded-xl border border-border/30 p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <ClipboardList className="size-3.5 text-muted-foreground" />
+                    <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Documents</span>
+                  </div>
+                  <div className="space-y-1">
+                    {docChecklist.map((item: { type: string; status: string; received: number }) => (
+                      <div key={item.type} className="flex items-center gap-2 text-xs">
+                        {item.status === "received" ? (
+                          <CheckCircle2 className="size-3.5 text-[#22C55E] shrink-0" />
+                        ) : (
+                          <div className="size-3.5 rounded-full border border-[#F5A623] shrink-0" />
+                        )}
+                        <span className={item.status === "received" ? "text-[#22C55E]" : "text-muted-foreground"}>{item.type}</span>
+                        {item.status === "received" && <span className="text-[10px] text-muted-foreground">✓</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Missing truckId warning */}
               {activeLoad && !activeLoad.truckId && (

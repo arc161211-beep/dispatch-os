@@ -51,6 +51,10 @@ const TOOLS: ToolDef[] = [
   { name: "findMatchingTrucks", description: "Score all trucks against a load (0–100 operational match).", params: { type: "object", properties: { loadId: { type: "string" } }, required: ["loadId"] } },
   { name: "createTask", description: "SUGGEST creating a follow-up task. This is a suggestion only — it requires human approval and is not executed.", params: { type: "object", properties: { title: { type: "string" }, description: { type: "string" }, type: { type: "string" }, priority: { type: "string" }, entityType: { type: "string" }, entityId: { type: "string" }, dueAt: { type: "number" } }, required: ["title"] } },
   { name: "createDraftReply", description: "SUGGEST drafting a reply to a message. This is a suggestion only — requires human approval.", params: { type: "object", properties: { messageId: { type: "string" }, instruction: { type: "string" } }, required: ["messageId"] } },
+  { name: "analyzeLoad", description: "Analyze a load for profitability: RPM, deadhead, risk factors, and recommendation.", params: { type: "object", properties: { loadId: { type: "string" } }, required: ["loadId"] } },
+  { name: "explainDelay", description: "Explain why a load is delayed or at risk, using GPS, ETA, and route data.", params: { type: "object", properties: { loadId: { type: "string" } }, required: ["loadId"] } },
+  { name: "getLoadSettlement", description: "Get the financial settlement breakdown for a load: gross rate, dispatcher fee, carrier amount, RPM.", params: { type: "object", properties: { loadId: { type: "string" } }, required: ["loadId"] } },
+  { name: "getMissingDocs", description: "Check which documents are missing for a load (rate confirmation, BOL, POD, invoice).", params: { type: "object", properties: { loadId: { type: "string" } }, required: ["loadId"] } },
 ];
 
 async function aiConfig() {
@@ -194,6 +198,73 @@ async function runTool(ctx: any, name: string, args: Record<string, unknown>, se
         ok: true,
         summary: "Reply drafting requested — pending human approval.",
         suggestion: { type: "draftReply", payload: args },
+      };
+    }
+    case "analyzeLoad": {
+      const r = await ctx.runQuery(api.loads.get, { id: args.loadId as string });
+      const l = r.load;
+      const rpm = l.rpm != null ? `$${l.rpm.toFixed(2)}/mi` : "N/A";
+      const effRpm = l.effectiveRpm != null ? `$${l.effectiveRpm.toFixed(2)}/mi` : "N/A";
+      const risk = l.deliveryRisk === "delayed" ? "DELAYED" : l.deliveryRisk === "at_risk" ? "AT RISK" : "On Time";
+      return {
+        ok: true,
+        summary: JSON.stringify({
+          loadNumber: l.loadNumber,
+          status: l.status,
+          origin: l.origin,
+          destination: l.destination,
+          grossRate: l.grossRateCents ? `$${(l.grossRateCents / 100).toFixed(2)}` : "N/A",
+          rpm,
+          effectiveRpm: effRpm,
+          loadedMiles: l.loadedMiles ?? "unknown",
+          deadheadMiles: l.deadheadMiles ?? "unknown",
+          dispatcherFee: l.feeCents ? `$${(l.feeCents / 100).toFixed(2)}` : "N/A",
+          carrierAmount: l.carrierAmountCents ? `$${(l.carrierAmountCents / 100).toFixed(2)}` : "N/A",
+          risk,
+          deliveryRisk: l.deliveryRisk,
+          pickupDate: l.pickupDate,
+          deliveryDate: l.deliveryDate,
+          equipment: l.equipment,
+          weight: l.weight,
+        }),
+      };
+    }
+    case "explainDelay": {
+      const liveTrip = await ctx.runQuery(api.loads.getLoadLiveTrip, { loadId: args.loadId as string });
+      const lt = liveTrip.load;
+      const loc = liveTrip.latestLocation;
+      const parts: string[] = [];
+      if (lt.deliveryRisk === "delayed") parts.push(`Load is DELAYED by ${lt.delayMinutes ?? 0} minutes.`);
+      else if (lt.deliveryRisk === "at_risk") parts.push(`Load is AT RISK of being late.`);
+      else parts.push(`Load is on time.`);
+      if (lt.etaDistanceMiles != null) parts.push(`Remaining distance: ${lt.etaDistanceMiles} miles.`);
+      if (lt.etaDurationSeconds != null) parts.push(`Estimated drive time: ${Math.floor(lt.etaDurationSeconds / 3600)}h ${Math.round((lt.etaDurationSeconds % 3600) / 60)}m.`);
+      if (lt.eta) parts.push(`ETA: ${new Date(lt.eta).toLocaleString()}.`);
+      if (lt.deliveryDate) parts.push(`Required delivery: ${new Date(lt.deliveryDate).toLocaleString()}.`);
+      if (!loc) parts.push("No GPS data available — the driver may not be sharing location.");
+      else {
+        const age = Date.now() - loc.at;
+        if (age > 30 * 60 * 1000) parts.push(`GPS data is stale (last update ${Math.round(age / 60000)} min ago).`);
+        else parts.push(`GPS is current (${Math.round(age / 1000)}s ago).`);
+      }
+      if (liveTrip.truck) parts.push(`Truck: ${liveTrip.truck.unitNumber} (${liveTrip.truck.availability}).`);
+      if (liveTrip.driver) parts.push(`Driver: ${liveTrip.driver.name}.`);
+      return { ok: true, summary: parts.join(" ") };
+    }
+    case "getLoadSettlement": {
+      const s2 = await ctx.runQuery(api.loads.getSettlement, { loadId: args.loadId as string });
+      return { ok: true, summary: JSON.stringify(s2) };
+    }
+    case "getMissingDocs": {
+      const checklist = await ctx.runQuery(api.documents.checklist, { loadId: args.loadId as string });
+      const missing = checklist.filter((c: any) => c.status === "missing");
+      return {
+        ok: true,
+        summary: JSON.stringify({
+          total: checklist.length,
+          received: checklist.length - missing.length,
+          missing: missing.map((c: any) => c.type),
+        }),
       };
     }
     default:

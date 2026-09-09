@@ -206,6 +206,24 @@ export default function Dashboard() {
                   <span className="font-medium">{summary.attention.missingPod.length} missing POD</span>
                 </Link>
               )}
+              {summary.attention.atRiskLoads?.length > 0 && (
+                <Link to="/loads" className="flex items-center gap-2 rounded-lg bg-[#F5A623]/5 border border-[#F5A623]/20 px-2.5 py-2 text-xs hover:bg-[#F5A623]/10">
+                  <span className="size-1.5 rounded-full bg-[#F5A623]" />
+                  <span className="font-medium">{summary.attention.atRiskLoads.length} load{summary.attention.atRiskLoads.length !== 1 ? "s" : ""} at risk</span>
+                </Link>
+              )}
+              {summary.attention.delayedLoads?.length > 0 && (
+                <Link to="/loads" className="flex items-center gap-2 rounded-lg bg-[#EF4444]/5 border border-[#EF4444]/20 px-2.5 py-2 text-xs hover:bg-[#EF4444]/10">
+                  <span className="size-1.5 rounded-full bg-[#EF4444]" />
+                  <span className="font-medium">{summary.attention.delayedLoads.length} delayed load{summary.attention.delayedLoads.length !== 1 ? "s" : ""}</span>
+                </Link>
+              )}
+              {summary.attention.pendingOffers?.length > 0 && (
+                <Link to="/loads" className="flex items-center gap-2 rounded-lg bg-electric/5 border border-electric/20 px-2.5 py-2 text-xs hover:bg-electric/10">
+                  <span className="size-1.5 rounded-full bg-electric" />
+                  <span className="font-medium">{summary.attention.pendingOffers.length} pending driver offer{summary.attention.pendingOffers.length !== 1 ? "s" : ""}</span>
+                </Link>
+              )}
               {summary.attention.overdueTasks.length > 0 && (
                 <Link to="/tasks" className="flex items-center gap-2 rounded-lg bg-[#F5A623]/5 border border-[#F5A623]/20 px-2.5 py-2 text-xs hover:bg-[#F5A623]/10">
                   <span className="size-1.5 rounded-full bg-[#F5A623]" />

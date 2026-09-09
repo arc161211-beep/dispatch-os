@@ -1097,3 +1097,48 @@ export const getDriverOffers = query({
 });
 
 export { parseTags };
+
+// ---------------------------------------------------------------------------
+// Settlement Preparation
+// ---------------------------------------------------------------------------
+
+/** Get settlement breakdown for a completed/active load. */
+export const getSettlement = query({
+  args: { loadId: v.id("loads") },
+  handler: async (ctx, args) => {
+    const s = await requireOrg(ctx);
+    const load = await ctx.db.get(args.loadId);
+    if (!load || load.orgId !== s.orgId) throw new ConvexError("Load not found.");
+
+    const scope = loadScope(s);
+    if (scope.carrierId && load.carrierId !== scope.carrierId) throw new ConvexError("Load not found.");
+    if (scope.driverId && load.driverId !== scope.driverId) throw new ConvexError("Load not found.");
+
+    const carrier = load.carrierId ? await ctx.db.get(load.carrierId) : null;
+    const existingInvoice = load._id
+      ? await ctx.db.query("invoices").withIndex("by_org_load", (q) => q.eq("orgId", s.orgId).eq("loadId", args.loadId)).first()
+      : null;
+
+    return {
+      loadNumber: load.loadNumber,
+      status: load.status,
+      grossRateCents: load.grossRateCents ?? 0,
+      fuelSurchargeCents: load.fuelSurchargeCents ?? 0,
+      accessorialsCents: load.accessorialsCents ?? 0,
+      totalRateCents: (load.grossRateCents ?? 0) + (load.fuelSurchargeCents ?? 0) + (load.accessorialsCents ?? 0),
+      dispatcherFeeCents: load.feeCents ?? 0,
+      carrierAmountCents: load.carrierAmountCents ?? 0,
+      feeType: load.feeType ?? "percentage",
+      feeRatePercent: load.feeRatePercent,
+      flatFeeCents: load.flatFeeCents,
+      rpm: load.rpm,
+      effectiveRpm: load.effectiveRpm,
+      loadedMiles: load.loadedMiles,
+      deadheadMiles: load.deadheadMiles,
+      carrierName: carrier?.companyName ?? null,
+      invoiceExists: !!existingInvoice,
+      invoiceNumber: existingInvoice?.invoiceNumber ?? null,
+      invoiceStatus: existingInvoice?.status ?? null,
+    };
+  },
+});

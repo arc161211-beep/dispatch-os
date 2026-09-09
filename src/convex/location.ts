@@ -301,6 +301,72 @@ export const updateTruckLocation = mutation({
       at: Date.now(),
     });
 
+    // PHASE 7 AUTO-ETA: Find active loads on this truck and auto-calculate ETA.
+    // This runs server-side when the driver's GPS updates, so ETA stays current
+    // without requiring a manual button press. Throttled to 5-min intervals by
+    // the calculateETA mutation itself.
+    const activeLoads = await ctx.db
+      .query("loads")
+      .withIndex("by_org_truck", (q) => q.eq("orgId", s.orgId).eq("truckId", args.truckId))
+      .collect();
+
+    for (const load of activeLoads) {
+      const activeStatuses = ["In Transit", "At Pickup", "Loaded", "At Delivery"];
+      if (!activeStatuses.includes(load.status)) continue;
+
+      // Only auto-ETA if ETA was calculated >5min ago or never calculated
+      if (load.etaUpdatedAt && Date.now() - load.etaUpdatedAt < 5 * 60 * 1000) continue;
+
+      // Need destination coordinates for ETA
+      if (load.destinationLat == null || load.destinationLng == null) continue;
+
+      // Haversine distance
+      const R = 3958.8;
+      const dLat = ((load.destinationLat - args.lat) * Math.PI) / 180;
+      const dLng = ((load.destinationLng - args.lon) * Math.PI) / 180;
+      const a = Math.sin(dLat / 2) ** 2 +
+        Math.cos((args.lat * Math.PI) / 180) * Math.cos((load.destinationLat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+      const distMiles = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const durSec = Math.round((distMiles / 55) * 3600);
+      const etaTimestamp = Date.now() + durSec * 1000;
+
+      let deliveryRisk: "on_time" | "at_risk" | "delayed" | "unknown" = "on_time";
+      let delayMinutes = 0;
+      const prevRisk = load.deliveryRisk;
+      if (load.deliveryDate && etaTimestamp > load.deliveryDate) {
+        delayMinutes = Math.round((etaTimestamp - load.deliveryDate) / 60000);
+        deliveryRisk = delayMinutes > 60 ? "delayed" : "at_risk";
+      }
+      const etaStatus: "on_time" | "at_risk" | "delayed" | "unknown" = deliveryRisk;
+
+      await ctx.db.patch(load._id, {
+        eta: etaTimestamp,
+        etaDistanceMiles: Math.round(distMiles * 10) / 10,
+        etaDurationSeconds: durSec,
+        etaUpdatedAt: Date.now(),
+        etaStatus,
+        deliveryRisk,
+        delayMinutes,
+      });
+
+      // Notify dispatchers when risk status changes (deduped)
+      if (prevRisk !== deliveryRisk && (deliveryRisk === "at_risk" || deliveryRisk === "delayed") && load.driverId) {
+        const driver = await ctx.db.get(load.driverId);
+        await ctx.db.insert("notifications", {
+          orgId: s.orgId as never,
+          userId: s.userId as never,
+          title: deliveryRisk === "delayed"
+            ? `⚠ DELAYED: Load ${load.loadNumber}`
+            : `⚡ At Risk: Load ${load.loadNumber}`,
+          body: deliveryRisk === "delayed"
+            ? `${load.loadNumber} is estimated ${delayMinutes} min late. ETA: ${new Date(etaTimestamp).toLocaleTimeString()}`
+            : `${load.loadNumber} may be late. ETA: ${new Date(etaTimestamp).toLocaleTimeString()}`,
+          link: `/loads/${load._id}`,
+          type: "load",
+        });
+      }
+    }
+
     return { ok: true };
   },
 });
