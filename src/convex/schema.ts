@@ -16,6 +16,10 @@ import {
   MESSAGE_PRIORITIES,
   MESSAGE_STATUSES,
   ROLES,
+  SIGNATURE_REQUEST_STATUSES,
+  SIGNATURE_TYPES,
+  SIGNER_ROLES,
+  SIGNER_STATUSES,
   TASK_PRIORITIES,
   TASK_STATUSES,
   TASK_TYPES,
@@ -619,6 +623,65 @@ const schema = defineSchema(
       updatedAt: v.number(),
     })
       .index("by_org_user", ["orgId", "userId"]),
+
+    // =========================================================================
+    // E-Signature tables
+    // =========================================================================
+
+    signatureRequests: defineTable({
+      orgId,
+      documentId: v.id("documents"),
+      loadId: v.optional(v.id("loads")),
+      status: v.union(...SIGNATURE_REQUEST_STATUSES.map((s) => v.literal(s))),
+      createdBy: userId,
+      createdByName: v.optional(v.string()),
+      message: v.optional(v.string()),
+      sequential: v.optional(v.boolean()),
+      completedAt: v.optional(v.number()),
+      cancelledAt: v.optional(v.number()),
+      expiresAt: v.optional(v.number()),
+    })
+      .index("by_org", ["orgId"])
+      .index("by_org_status", ["orgId", "status"])
+      .index("by_org_document", ["orgId", "documentId"])
+      .index("by_org_load", ["orgId", "loadId"]),
+
+    signatureRequestSigners: defineTable({
+      orgId,
+      signatureRequestId: v.id("signatureRequests"),
+      signerUserId: v.optional(userId),
+      signerName: v.string(),
+      signerEmail: v.optional(v.string()),
+      role: v.union(...SIGNER_ROLES.map((r) => v.literal(r))),
+      order: v.number(),
+      status: v.union(...SIGNER_STATUSES.map((s) => v.literal(s))),
+      viewedAt: v.optional(v.number()),
+      signedAt: v.optional(v.number()),
+      declinedAt: v.optional(v.number()),
+      declineReason: v.optional(v.string()),
+      signatureId: v.optional(v.id("signatures")),
+    })
+      .index("by_org", ["orgId"])
+      .index("by_request", ["signatureRequestId"])
+      .index("by_user", ["signerUserId"]),
+
+    signatures: defineTable({
+      orgId,
+      signatureRequestId: v.id("signatureRequests"),
+      signerId: v.id("signatureRequestSigners"),
+      signerUserId: v.optional(userId),
+      signerName: v.string(),
+      signatureType: v.union(...SIGNATURE_TYPES.map((t) => v.literal(t))),
+      signatureStorageId: v.optional(v.string()),
+      signatureText: v.optional(v.string()),
+      signedAt: v.number(),
+      ipAddress: v.optional(v.string()),
+      userAgent: v.optional(v.string()),
+      consentConfirmed: v.boolean(),
+    })
+      .index("by_org", ["orgId"])
+      .index("by_request", ["signatureRequestId"])
+      .index("by_signer", ["signerId"]),
   },
   {
     schemaValidation: false,

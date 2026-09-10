@@ -48,6 +48,7 @@ const UserManagement = lazy(() => import("./pages/UserManagement.tsx"));
 const StatusPage = lazy(() => import("./pages/Status.tsx"));
 const TruckMapPage = lazy(() => import("./pages/TruckMapPage.tsx"));
 const LoadBoardPage = lazy(() => import("./pages/LoadBoard.tsx"));
+const SigningPage = lazy(() => import("./pages/SigningPage.tsx"));
 
 // Premium loading fallback for route transitions
 function RouteLoading() {
@@ -222,6 +223,7 @@ createRoot(document.getElementById("root")!).render(
                 {/* ── Carrier portal (carrier_admin role only) ── */}
                 <Route path="/portal/carrier" element={<Protected><RoleGate><PortalCarrier /></RoleGate></Protected>} />
                 <Route path="/track/:token" element={<TrackingPage />} />
+                <Route path="/sign/:id" element={<Protected><SigningPage /></Protected>} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>

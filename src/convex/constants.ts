@@ -244,6 +244,25 @@ export const RISK_STATUSES = ["on_time", "at_risk", "delayed", "unknown"] as con
 export type RiskStatus = (typeof RISK_STATUSES)[number];
 
 // ---------------------------------------------------------------------------
+// E-Signatures
+// ---------------------------------------------------------------------------
+
+export const SIGNATURE_REQUEST_STATUSES = ["pending", "in_progress", "completed", "declined", "expired", "cancelled"] as const;
+export type SignatureRequestStatus = (typeof SIGNATURE_REQUEST_STATUSES)[number];
+
+export const SIGNER_STATUSES = ["pending", "viewed", "signed", "declined"] as const;
+export type SignerStatus = (typeof SIGNER_STATUSES)[number];
+
+export const SIGNATURE_TYPES = ["draw", "upload", "typed"] as const;
+export type SignatureType = (typeof SIGNATURE_TYPES)[number];
+
+export const SIGNER_ROLES = ["carrier", "dispatcher", "broker", "shipper", "driver", "other"] as const;
+export type SignerRole = (typeof SIGNER_ROLES)[number];
+
+export const SIGNATURE_ALLOWED_MIME = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"] as const;
+export const SIGNATURE_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
+
+// ---------------------------------------------------------------------------
 // Integration Providers (for System Status page)
 // ---------------------------------------------------------------------------
 
