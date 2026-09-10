@@ -12,6 +12,7 @@ import { fmtDate, fmtDateTime, fmtRelative } from "@/lib/dates";
 import { useTimezone } from "@/hooks/use-app";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
+import { UploadDocumentButton } from "@/components/app/UploadDocument";
 import {
   Package,
   MapPin,
@@ -737,14 +738,19 @@ export default function PortalDriver() {
                   </div>
                   <div className="space-y-1">
                     {docChecklist.map((item: { type: string; status: string; received: number }) => (
-                      <div key={item.type} className="flex items-center gap-2 text-xs">
-                        {item.status === "received" ? (
-                          <CheckCircle2 className="size-3.5 text-[#22C55E] shrink-0" />
-                        ) : (
-                          <div className="size-3.5 rounded-full border border-[#F5A623] shrink-0" />
+                      <div key={item.type} className="flex items-center justify-between gap-2 text-xs">
+                        <div className="flex items-center gap-2">
+                          {item.status === "received" ? (
+                            <CheckCircle2 className="size-3.5 text-[#22C55E] shrink-0" />
+                          ) : (
+                            <div className="size-3.5 rounded-full border border-[#F5A623] shrink-0" />
+                          )}
+                          <span className={item.status === "received" ? "text-[#22C55E]" : "text-muted-foreground"}>{item.type}</span>
+                          {item.status === "received" && <span className="text-[10px] text-muted-foreground">✓</span>}
+                        </div>
+                        {item.status === "missing" && activeLoad && (
+                          <UploadDocumentButton entityType="load" entityId={activeLoad._id} defaultType={item.type} size="sm" />
                         )}
-                        <span className={item.status === "received" ? "text-[#22C55E]" : "text-muted-foreground"}>{item.type}</span>
-                        {item.status === "received" && <span className="text-[10px] text-muted-foreground">✓</span>}
                       </div>
                     ))}
                   </div>

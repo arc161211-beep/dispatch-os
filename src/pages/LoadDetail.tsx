@@ -14,12 +14,31 @@ import { PageHeader, StatusBadge, Money, SectionCard, LoadingState, KV, errorMes
 import { Field, Grid, SelectInput, TextInput, TextArea } from "@/components/app/forms";
 import { UploadDocumentButton } from "@/components/app/UploadDocument";
 import { fmtDate, fmtDateTime, fmtRelative } from "@/lib/dates";
-import { ArrowLeft, FileText, Package, Truck, UserRound, Clock, Route, Wallet, MapPin, ChevronRight, Globe, Loader2 } from "lucide-react";
+import { ArrowLeft, FileText, Package, Truck, UserRound, Clock, Route, Wallet, MapPin, ChevronRight, Globe, Loader2, ExternalLink } from "lucide-react";
 import { WeatherCard, RouteWeather } from "@/components/app/WeatherCard";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Timer, CheckCircle2, AlertTriangle } from "lucide-react";
 
 const STATUS_INDEX = LOAD_STATUSES.reduce((acc, s, i) => ({ ...acc, [s]: i }), {} as Record<string, number>);
+
+/** View / Download link for a stored document. */
+function DocumentLinkButton({ storageId, fileName, mimeType }: { storageId?: string | null; fileName: string; mimeType?: string | null }) {
+  const url = useQuery(api.documents.getUrl, storageId ? { storageId } : "skip");
+  if (!url) return null;
+  const isImage = mimeType?.startsWith("image/");
+  if (isImage) {
+    return (
+      <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-muted transition-colors" title="View">
+        <ExternalLink className="size-4 text-muted-foreground" />
+      </a>
+    );
+  }
+  return (
+    <a href={url} download={fileName} className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-muted transition-colors" title="Download">
+      <ExternalLink className="size-4 text-muted-foreground" />
+    </a>
+  );
+}
 
 export default function LoadDetail() {
   const { id } = useParams<{ id: string }>();
@@ -415,7 +434,10 @@ export default function LoadDetail() {
                 {documents.map((d) => (
                   <div key={d._id} className="flex items-center justify-between py-2">
                     <div><p className="text-sm font-medium">{d.fileName}</p><p className="text-xs text-muted-foreground">{d.type} · {d.uploadedByName ?? "—"}</p></div>
-                    <Badge variant="outline">{d.type}</Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline">{d.type}</Badge>
+                      <DocumentLinkButton storageId={d.storageId} fileName={d.fileName} mimeType={d.mimeType} />
+                    </div>
                   </div>
                 ))}
               </div>
