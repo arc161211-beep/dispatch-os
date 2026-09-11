@@ -46,6 +46,20 @@ export const get = query({
   },
 });
 
+/** List all signature requests for the current org. */
+export const listAllRequests = query({
+  args: {},
+  handler: async (ctx) => {
+    const s = await requireOrg(ctx);
+    const rows = await ctx.db
+      .query("signatureRequests")
+      .withIndex("by_org", (q) => q.eq("orgId", s.orgId))
+      .order("desc")
+      .take(100);
+    return rows;
+  },
+});
+
 /** Get signature requests I need to sign. */
 export const getMyRequests = query({
   args: {},

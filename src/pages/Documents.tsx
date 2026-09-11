@@ -10,11 +10,20 @@ import { PageHeader, LoadingState, EmptyState, ConfirmButton, errorMessage } fro
 import { SelectInput } from "@/components/app/forms";
 import { ResponsiveTable, type Column } from "@/components/app/ResponsiveTable";
 import { UploadDocumentButton } from "@/components/app/UploadDocument";
+import { RequestSignatureButton } from "@/components/app/RequestSignature";
 import { fmtDate } from "@/lib/dates";
 import { cn } from "@/lib/utils";
-import { FileText, Trash2, ExternalLink, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
+import { FileText, Trash2, ExternalLink, AlertTriangle, CheckCircle2, XCircle, PenLine } from "lucide-react";
+import type { Id } from "@/convex/_generated/dataModel";
 
 type DocType = any;
+
+type SignatureRequestInfo = {
+  _id: Id<"signatureRequests">;
+  status: string;
+  documentId: Id<"documents">;
+  _creationTime: number;
+};
 
 export default function Documents() {
   const canWrite = useCanWrite();
@@ -23,6 +32,17 @@ export default function Documents() {
   const [expiryFilter, setExpiryFilter] = useState<"" | "valid" | "expiring" | "expired">("");
   const docs = useQuery(api.documents.list, { type: typeFilter || undefined });
   const removeDoc = useMutation(api.documents.remove);
+
+  // Fetch signature requests for status indicators
+  const allSigRequests = useQuery(api.signatures.listAllRequests, {});
+  const sigRequestMap = new Map<string, SignatureRequestInfo[]>();
+  if (allSigRequests) {
+    for (const req of allSigRequests) {
+      const docId = req.documentId as string;
+      if (!sigRequestMap.has(docId)) sigRequestMap.set(docId, []);
+      sigRequestMap.get(docId)!.push(req);
+    }
+  }
 
   const handleDelete = async (doc: DocType) => {
     try { await removeDoc({ id: doc._id as any }); toast.success("Document deleted."); } catch (e) { toast.error(errorMessage(e)); }
@@ -72,14 +92,43 @@ export default function Documents() {
     { key: "version", header: "Version", hideOnMobile: true, render: (d) => (
       <span className="text-xs text-muted-foreground">v{d.version ?? 1}</span>
     ) },
+    { key: "signature", header: "Signature", hideOnMobile: true, render: (d) => {
+      const reqs = sigRequestMap.get(d._id as string) ?? [];
+      if (reqs.length === 0) return <span className="text-xs text-muted-foreground">—</span>;
+      const latest = reqs[0]; // most recent first
+      return (
+        <div className="flex items-center gap-1.5">
+          <PenLine className="size-3 text-muted-foreground" />
+          <Badge variant="outline" className={cn("text-[10px] border-transparent",
+            latest.status === "completed" ? "bg-emerald-500/10 text-emerald-600" :
+            latest.status === "pending" || latest.status === "in_progress" ? "bg-amber-500/10 text-amber-600" :
+            latest.status === "declined" ? "bg-red-500/10 text-red-600" :
+            latest.status === "cancelled" ? "bg-muted text-muted-foreground" : "bg-muted text-muted-foreground"
+          )}>
+            {latest.status === "completed" ? "Signed" : latest.status === "in_progress" ? "In Progress" : latest.status.charAt(0).toUpperCase() + latest.status.slice(1)}
+          </Badge>
+        </div>
+      );
+    } },
     { key: "entity", header: "Linked to", hideOnMobile: true, render: (d) => <span className="text-sm text-muted-foreground">{d.entityType ? `${d.entityType} · ${d.entityId?.slice(0, 8)}…` : "—"}</span> },
     { key: "size", header: "Size", hideOnMobile: true, render: (d) => <span className="text-sm text-muted-foreground">{d.size ? `${(d.size / 1024).toFixed(0)} KB` : "—"}</span> },
-    ...(canWrite ? [{ key: "actions" as const, header: "", hideOnMobile: true, render: (d: DocType) => (
-      <div className="flex justify-end gap-1">
-        {d.storageId && <UrlButton storageId={d.storageId} />}
-        <ConfirmButton trigger={<Button variant="ghost" size="icon"><Trash2 className="size-4 text-destructive" /></Button>} title="Delete document?" description="This cannot be undone." onConfirm={() => handleDelete(d)} confirmLabel="Delete" />
-      </div>
-    ) }] : []),
+    ...(canWrite ? [{ key: "actions" as const, header: "", hideOnMobile: true, render: (d: DocType) => {
+      const reqs = sigRequestMap.get(d._id as string) ?? [];
+      const hasActiveReq = reqs.some((r) => r.status === "pending" || r.status === "in_progress");
+      return (
+        <div className="flex justify-end gap-1">
+          {d.storageId && <UrlButton storageId={d.storageId} />}
+          {!hasActiveReq && (
+            <RequestSignatureButton
+              documentId={d._id}
+              loadId={d.entityId && d.entityType === "load" ? d.entityId as Id<"loads"> : undefined}
+              size="icon"
+            />
+          )}
+          <ConfirmButton trigger={<Button variant="ghost" size="icon"><Trash2 className="size-4 text-destructive" /></Button>} title="Delete document?" description="This cannot be undone." onConfirm={() => handleDelete(d)} confirmLabel="Delete" />
+        </div>
+      );
+    } }] : []),
   ];
 
   return (

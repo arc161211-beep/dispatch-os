@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { LoadingState, EmptyState, errorMessage } from "@/components/app/shared";
 import { PageHeader } from "@/components/app/shared";
+import { fmtDateTime } from "@/lib/dates";
 import {
   PenLine,
   Upload,
@@ -28,6 +29,10 @@ export default function SigningPage() {
 
   const request = useQuery(
     api.signatures.get,
+    requestId ? { requestId: requestId as any } : "skip",
+  );
+  const auditTrail = useQuery(
+    api.signatures.getAuditTrail,
     requestId ? { requestId: requestId as any } : "skip",
   );
 
@@ -155,6 +160,40 @@ export default function SigningPage() {
                 <p className="text-sm text-muted-foreground">
                   This document has been fully signed by all parties.
                 </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Audit Trail */}
+        {auditTrail && auditTrail.signatures.length > 0 && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Audit Trail</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {auditTrail.signatures.map((sig) => (
+                  <div key={sig._id} className="flex items-start gap-3 rounded-md border p-3">
+                    <CheckCircle2 className="size-4 mt-0.5 shrink-0 text-emerald-500" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium">{sig.signerName}</p>
+                        <Badge variant="outline" className="text-[10px] border-transparent bg-muted text-muted-foreground">
+                          {sig.signatureType === "draw" ? "Drew" : sig.signatureType === "upload" ? "Uploaded" : "Typed"}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Signed at {fmtDateTime(sig.signedAt)}
+                      </p>
+                      {sig.consentConfirmed && (
+                        <p className="text-[10px] text-emerald-600 mt-0.5">
+                          ✓ Electronic consent confirmed
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>
@@ -349,10 +388,7 @@ function DrawingPad({
   const [busy, setBusy] = useState(false);
 
   const signDocument = useMutation(api.signatures.signDocument);
-  const generateUploadUrl = useMutation(
-    // Use documents' generateUploadUrl since it's the same Convex storage
-    (await import("@/convex/_generated/api")).api.documents.generateUploadUrl,
-  );
+  const generateUploadUrl = useMutation(api.documents.generateUploadUrl);
 
   const getPos = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -484,6 +520,7 @@ function UploadSignature({
   const [busy, setBusy] = useState(false);
 
   const signDocument = useMutation(api.signatures.signDocument);
+  const generateUploadUrl = useMutation(api.documents.generateUploadUrl);
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] ?? null;
@@ -500,13 +537,22 @@ function UploadSignature({
     if (!file) return;
     setBusy(true);
     try {
-      const { api: apiModule } = await import("@/convex/_generated/api");
-      const generateUploadUrl = useMutation(apiModule.documents.generateUploadUrl);
+      const uploadUrl = await generateUploadUrl();
+      const res = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!res.ok) throw new Error("Upload failed.");
+      const { storageId } = (await res.json()) as { storageId: string };
 
-      // We can't call useMutation here, so we need to do it differently
-      // Actually this won't work in a non-component context. Let me use a simpler approach.
-      toast.error("Please use the Draw or Type option for now.");
-      setBusy(false);
+      await signDocument({
+        signerRowId: signerRowId as any,
+        signatureType: "upload",
+        signatureStorageId: storageId,
+        consentConfirmed: true,
+      });
+      onSigned();
     } catch (err) {
       toast.error(errorMessage(err));
     } finally {

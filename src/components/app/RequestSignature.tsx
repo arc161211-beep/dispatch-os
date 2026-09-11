@@ -1,12 +1,11 @@
 import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
-import { DOCUMENT_TYPES } from "@/convex/constants";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Field, Grid, SelectInput, TextArea } from "@/components/app/forms";
+import { Field, SelectInput, TextArea } from "@/components/app/forms";
 import { errorMessage } from "@/components/app/shared";
 import { PenLine, Trash2, Plus } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -74,7 +73,6 @@ function RequestSignatureDialog({
   ]);
 
   const createRequest = useMutation(api.signatures.createRequest);
-  const users = useQuery(api.users.listUsers, {});
 
   const addSigner = () => {
     setSigners((prev) => [
@@ -200,17 +198,7 @@ function RequestSignatureDialog({
                   placeholder="john@example.com"
                 />
               </Field>
-              <Field label="Link to user (optional)">
-                <SelectInput
-                  value={signer.signerUserId ?? ""}
-                  onChange={(e) => updateSigner(idx, "signerUserId", e.target.value)}
-                >
-                  <option value="">No linked user</option>
-                  {users?.map((u) => (
-                    <option key={u._id} value={u._id}>{u.name ?? u.email ?? u._id}</option>
-                  ))}
-                </SelectInput>
-              </Field>
+
             </div>
           ))}
 

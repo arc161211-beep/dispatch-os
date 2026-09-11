@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { PageHeader, StatusBadge, Money, SectionCard, LoadingState, KV, errorMessage, ConfirmButton } from "@/components/app/shared";
 import { Field, Grid, SelectInput, TextInput, TextArea } from "@/components/app/forms";
 import { UploadDocumentButton } from "@/components/app/UploadDocument";
+import { RequestSignatureButton } from "@/components/app/RequestSignature";
 import { fmtDate, fmtDateTime, fmtRelative } from "@/lib/dates";
 import { ArrowLeft, FileText, Package, Truck, UserRound, Clock, Route, Wallet, MapPin, ChevronRight, Globe, Loader2, ExternalLink } from "lucide-react";
 import { WeatherCard, RouteWeather } from "@/components/app/WeatherCard";
@@ -51,6 +52,7 @@ export default function LoadDetail() {
   const trucks = useQuery(api.trucks.list, {});
   const drivers = useQuery(api.drivers.list, {});
   const checklist = useQuery(api.documents.checklist, { loadId: id as Id<"loads"> });
+  const sigRequests = useQuery(api.signatures.getByLoad, { loadId: id as Id<"loads"> });
   const setStatus = useMutation(api.loads.setStatus);
   const assignResources = useMutation(api.loads.assignResources);
   const remove = useMutation(api.loads.remove);
@@ -314,6 +316,7 @@ export default function LoadDetail() {
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="financials">Financials</TabsTrigger>
           <TabsTrigger value="documents">Documents ({documents.length})</TabsTrigger>
+          <TabsTrigger value="signatures">Signatures ({sigRequests?.length ?? 0})</TabsTrigger>
           <TabsTrigger value="history">History</TabsTrigger>
           <TabsTrigger value="matching">Load match</TabsTrigger>
         </TabsList>
@@ -415,6 +418,37 @@ export default function LoadDetail() {
               ))}
             </SectionCard>
           </div>
+        </TabsContent>
+
+        <TabsContent value="signatures" className="space-y-4 mt-4">
+          <SectionCard title="Signature Requests">
+            {!sigRequests || sigRequests.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-2">No signature requests for this load.</p>
+            ) : (
+              <div className="divide-y">
+                {sigRequests.map((sr) => (
+                  <div key={sr.request._id} className="py-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">{sr.document?.fileName ?? "Document"}</span>
+                      <Badge variant="outline" className={sr.request.status === "completed" ? "bg-emerald-500/10 text-emerald-600 border-transparent" : sr.request.status === "pending" || sr.request.status === "in_progress" ? "bg-amber-500/10 text-amber-600 border-transparent" : "bg-muted text-muted-foreground border-transparent"}>
+                        {sr.request.status === "completed" ? "Completed" : sr.request.status.charAt(0).toUpperCase() + sr.request.status.slice(1)}
+                      </Badge>
+                    </div>
+                    <div className="mt-2 space-y-1">
+                      {sr.signers.map((signer: any) => (
+                        <div key={signer._id} className="flex items-center gap-2 text-xs">
+                          <span className="text-muted-foreground">{signer.signerName} ({signer.role})</span>
+                          <span className={signer.status === "signed" ? "text-emerald-600" : signer.status === "declined" ? "text-red-600" : signer.status === "viewed" ? "text-amber-600" : "text-muted-foreground"}>
+                            {signer.status.charAt(0).toUpperCase() + signer.status.slice(1)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </SectionCard>
         </TabsContent>
 
         <TabsContent value="documents" className="space-y-4 mt-4">
