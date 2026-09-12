@@ -516,142 +516,211 @@ export const getOperationalSummary = query({
 // to prevent spam. Safe to call repeatedly.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// PHASE 12-13: Proactive Operations Scan
+//
+// Two entry points:
+// 1. `proactiveScan` — public mutation, requires authenticated write-role user.
+//    Use from the dashboard or API for manual scanning.
+// 2. `scheduledProactiveScan` — internal mutation, called by Convex cron.
+//    Scans ALL orgs and notifies all write-role users in each org.
+//
+// Both use the shared `runOrgScan` helper for idempotent, bounded scanning.
+// ---------------------------------------------------------------------------
+
+import { v } from "convex/values";
+import { internalMutation } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+
+/** Core scan logic — operates on a single org. Returns scan results. */
+async function runOrgScan(
+  ctx: any,
+  orgId: Id<"organizations">,
+): Promise<{ scanned: string[]; notificationsSent: number }> {
+  const now = Date.now();
+  const DAY = 86_400_000;
+  const scanned: string[] = [];
+  let notificationsSent = 0;
+  const WRITE_ROLES = new Set(["admin", "super_admin", "dispatcher", "operations"]);
+
+  // Find write-role users for this org (bounded)
+  const orgUsers = await ctx.db
+    .query("users")
+    .withIndex("by_org", (q: any) => q.eq("orgId", orgId))
+    .take(50)
+    .then((users: any[]) => users.filter((u) => u.role && WRITE_ROLES.has(u.role)));
+
+  if (orgUsers.length === 0) return { scanned: [], notificationsSent: 0 };
+
+  // Helper: check dedup for a specific user
+  async function wasRecentlyNotified(userId: string, titlePrefix: string): Promise<boolean> {
+    const recent = await ctx.db
+      .query("notifications")
+      .withIndex("by_org_user", (q: any) => q.eq("orgId", orgId).eq("userId", userId))
+      .order("desc")
+      .take(30);
+    return recent.some((n: any) => n.title.startsWith(titlePrefix) && now - n._creationTime < DAY);
+  }
+
+  // 1. OVERDUE INVOICES
+  const invoices = await ctx.db
+    .query("invoices")
+    .withIndex("by_org", (q: any) => q.eq("orgId", orgId))
+    .take(200);
+  const overdue = invoices.filter(
+    (i: any) => !["Paid", "Cancelled"].includes(i.status) && i.dueDate && i.dueDate < now,
+  );
+  if (overdue.length > 0) {
+    const totalOutstanding = overdue.reduce((sum: number, i: any) => sum + (i.amountCents - i.paidCents), 0);
+    for (const user of orgUsers) {
+      if (!(await wasRecentlyNotified(user._id, "💰 Overdue invoices"))) {
+        await ctx.db.insert("notifications", {
+          orgId,
+          userId: user._id,
+          title: `💰 ${overdue.length} overdue invoice${overdue.length > 1 ? "s" : ""}`,
+          body: `Outstanding balance: $${(totalOutstanding / 100).toFixed(2)}. Oldest: ${overdue[0].invoiceNumber}.`,
+          link: "/finance",
+          type: "finance",
+        });
+        notificationsSent++;
+      }
+    }
+  }
+  scanned.push("overdue_invoices");
+
+  // 2. EXPIRING DRIVER DOCUMENTS (license, medical card within 30 days)
+  const drivers = await ctx.db
+    .query("drivers")
+    .withIndex("by_org", (q: any) => q.eq("orgId", orgId))
+    .take(200);
+  const expiringDrivers = drivers.filter((d: any) => {
+    const licenseExpiry = d.licenseExpiry ?? 0;
+    const medicalExpiry = d.medicalCardExpiry ?? 0;
+    return (licenseExpiry > 0 && licenseExpiry < now + 30 * DAY) ||
+           (medicalExpiry > 0 && medicalExpiry < now + 30 * DAY);
+  });
+  if (expiringDrivers.length > 0) {
+    const names = expiringDrivers.slice(0, 3).map((d: any) => d.name).join(", ");
+    const suffix = expiringDrivers.length > 3 ? ` and ${expiringDrivers.length - 3} more` : "";
+    for (const user of orgUsers) {
+      if (!(await wasRecentlyNotified(user._id, "⚠️ Driver compliance"))) {
+        await ctx.db.insert("notifications", {
+          orgId,
+          userId: user._id,
+          title: `⚠️ ${expiringDrivers.length} driver${expiringDrivers.length > 1 ? "s" : ""} with expiring documents`,
+          body: `${names}${suffix} — license or medical card expiring within 30 days.`,
+          link: "/drivers",
+          type: "document",
+        });
+        notificationsSent++;
+      }
+    }
+  }
+  scanned.push("driver_compliance");
+
+  // 3. STALE GPS (tracking-active trucks with no update in 1 hour)
+  const trucks = await ctx.db
+    .query("trucks")
+    .withIndex("by_org", (q: any) => q.eq("orgId", orgId))
+    .take(200);
+  const staleTrucks = trucks.filter(
+    (t: any) => t.trackingActive && t.lastLocationUpdateAt && now - t.lastLocationUpdateAt > 60 * 60 * 1000,
+  );
+  if (staleTrucks.length > 0) {
+    const units = staleTrucks.slice(0, 3).map((t: any) => t.unitNumber).join(", ");
+    const suffix = staleTrucks.length > 3 ? ` and ${staleTrucks.length - 3} more` : "";
+    for (const user of orgUsers) {
+      if (!(await wasRecentlyNotified(user._id, "📡 Stale GPS"))) {
+        await ctx.db.insert("notifications", {
+          orgId,
+          userId: user._id,
+          title: `📡 ${staleTrucks.length} truck${staleTrucks.length > 1 ? "s" : ""} with stale GPS`,
+          body: `Truck${staleTrucks.length > 1 ? "s" : ""} ${units}${suffix} — no GPS update in over 1 hour.`,
+          link: "/truck-map",
+          type: "location",
+        });
+        notificationsSent++;
+      }
+    }
+  }
+  scanned.push("stale_gps");
+
+  // 4. LOADS PENDING DRIVER OFFER TOO LONG (>24h with pending offer)
+  const loads = await ctx.db
+    .query("loads")
+    .withIndex("by_org", (q: any) => q.eq("orgId", orgId))
+    .take(500);
+  const staleOffers = loads.filter((l: any) =>
+    l.offerStatus === "pending" && l.driverId && l._creationTime < now - DAY,
+  );
+  if (staleOffers.length > 0) {
+    const nums = staleOffers.slice(0, 3).map((l: any) => l.loadNumber).join(", ");
+    const suffix = staleOffers.length > 3 ? ` and ${staleOffers.length - 3} more` : "";
+    for (const user of orgUsers) {
+      if (!(await wasRecentlyNotified(user._id, "⏰ Pending driver offers"))) {
+        await ctx.db.insert("notifications", {
+          orgId,
+          userId: user._id,
+          title: `⏰ ${staleOffers.length} load${staleOffers.length > 1 ? "s" : ""} with pending driver offer`,
+          body: `${nums}${suffix} — driver has not responded in over 24 hours.`,
+          link: "/loads",
+          type: "load",
+        });
+        notificationsSent++;
+      }
+    }
+  }
+  scanned.push("pending_offers");
+
+  // 5. DELIVERED LOADS WITHOUT POD (>48h since delivery)
+  const deliveredNoPod = loads.filter((l: any) =>
+    (l.status === "Delivered" || l.status === "POD Pending") &&
+    l.deliveryDate && l.deliveryDate < now - 2 * DAY,
+  );
+  if (deliveredNoPod.length > 0) {
+    const nums = deliveredNoPod.slice(0, 3).map((l: any) => l.loadNumber).join(", ");
+    const suffix = deliveredNoPod.length > 3 ? ` and ${deliveredNoPod.length - 3} more` : "";
+    for (const user of orgUsers) {
+      if (!(await wasRecentlyNotified(user._id, "📋 Missing POD"))) {
+        await ctx.db.insert("notifications", {
+          orgId,
+          userId: user._id,
+          title: `📋 ${deliveredNoPod.length} load${deliveredNoPod.length > 1 ? "s" : ""} missing POD`,
+          body: `${nums}${suffix} — delivered over 48 hours ago without proof of delivery.`,
+          link: "/loads",
+          type: "document",
+        });
+        notificationsSent++;
+      }
+    }
+  }
+  scanned.push("missing_pod");
+
+  return { scanned, notificationsSent };
+}
+
+/** Public mutation: scan the calling user's org. */
 export const proactiveScan = mutation({
   args: {},
   handler: async (ctx) => {
     const s = await requireWrite(ctx);
-    const now = Date.now();
-    const DAY = 86_400_000;
-    const scanned: string[] = [];
-    let notificationsSent = 0;
+    const result = await runOrgScan(ctx, s.orgId);
+    return { ...result, timestamp: Date.now() };
+  },
+});
 
-    // Helper: check if a similar notification was sent in the last 24 hours
-    async function wasRecentlyNotified(titlePrefix: string): Promise<boolean> {
-      const recent = await ctx.db
-        .query("notifications")
-        .withIndex("by_org_user", (q) => q.eq("orgId", s.orgId).eq("userId", s.userId))
-        .order("desc")
-        .take(30);
-      return recent.some((n) => n.title.startsWith(titlePrefix) && now - n._creationTime < DAY);
+/** Internal mutation: scan ALL orgs. Called by Convex cron. */
+export const scheduledProactiveScan = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const orgs = await ctx.db.query("organizations").take(100);
+    let totalOrgsScanned = 0;
+    let totalNotificationsSent = 0;
+    for (const org of orgs) {
+      const result = await runOrgScan(ctx, org._id);
+      totalOrgsScanned++;
+      totalNotificationsSent += result.notificationsSent;
     }
-
-    // 1. OVERDUE INVOICES
-    const invoices = await ctx.db
-      .query("invoices")
-      .withIndex("by_org", (q) => q.eq("orgId", s.orgId))
-      .take(200);
-    const overdue = invoices.filter(
-      (i) => !["Paid", "Cancelled"].includes(i.status) && i.dueDate && i.dueDate < now
-    );
-    if (overdue.length > 0 && !(await wasRecentlyNotified("💰 Overdue invoices"))) {
-      const totalOutstanding = overdue.reduce((sum, i) => sum + (i.amountCents - i.paidCents), 0);
-      await ctx.db.insert("notifications", {
-        orgId: s.orgId as never,
-        userId: s.userId as never,
-        title: `💰 ${overdue.length} overdue invoice${overdue.length > 1 ? "s" : ""}`,
-        body: `Outstanding balance: $${(totalOutstanding / 100).toFixed(2)}. Oldest: ${overdue[0].invoiceNumber}.`,
-        link: "/finance",
-        type: "finance",
-      });
-      notificationsSent++;
-    }
-    scanned.push("overdue_invoices");
-
-    // 2. EXPIRING DRIVER DOCUMENTS (license, medical card within 30 days)
-    const drivers = await ctx.db
-      .query("drivers")
-      .withIndex("by_org", (q) => q.eq("orgId", s.orgId))
-      .take(200);
-    const expiringDrivers = drivers.filter((d) => {
-      const licenseExpiry = d.licenseExpiry ?? 0;
-      const medicalExpiry = d.medicalCardExpiry ?? 0;
-      return (licenseExpiry > 0 && licenseExpiry < now + 30 * DAY) ||
-             (medicalExpiry > 0 && medicalExpiry < now + 30 * DAY);
-    });
-    if (expiringDrivers.length > 0 && !(await wasRecentlyNotified("⚠️ Driver compliance"))) {
-      const names = expiringDrivers.slice(0, 3).map((d) => d.name).join(", ");
-      const suffix = expiringDrivers.length > 3 ? ` and ${expiringDrivers.length - 3} more` : "";
-      await ctx.db.insert("notifications", {
-        orgId: s.orgId as never,
-        userId: s.userId as never,
-        title: `⚠️ ${expiringDrivers.length} driver${expiringDrivers.length > 1 ? "s" : ""} with expiring documents`,
-        body: `${names}${suffix} — license or medical card expiring within 30 days.`,
-        link: "/drivers",
-        type: "document",
-      });
-      notificationsSent++;
-    }
-    scanned.push("driver_compliance");
-
-    // 3. STALE GPS (tracking-active trucks with no update in 1 hour)
-    const trucks = await ctx.db
-      .query("trucks")
-      .withIndex("by_org", (q) => q.eq("orgId", s.orgId))
-      .take(200);
-    const staleTrucks = trucks.filter(
-      (t) => t.trackingActive && t.lastLocationUpdateAt && now - t.lastLocationUpdateAt > 60 * 60 * 1000
-    );
-    if (staleTrucks.length > 0 && !(await wasRecentlyNotified("📡 Stale GPS"))) {
-      const units = staleTrucks.slice(0, 3).map((t) => t.unitNumber).join(", ");
-      const suffix = staleTrucks.length > 3 ? ` and ${staleTrucks.length - 3} more` : "";
-      await ctx.db.insert("notifications", {
-        orgId: s.orgId as never,
-        userId: s.userId as never,
-        title: `📡 ${staleTrucks.length} truck${staleTrucks.length > 1 ? "s" : ""} with stale GPS`,
-        body: `Truck${staleTrucks.length > 1 ? "s" : ""} ${units}${suffix} — no GPS update in over 1 hour.`,
-        link: "/truck-map",
-        type: "location",
-      });
-      notificationsSent++;
-    }
-    scanned.push("stale_gps");
-
-    // 4. LOADS PENDING DRIVER OFFER TOO LONG (>24h with pending offer)
-    const loads = await ctx.db
-      .query("loads")
-      .withIndex("by_org", (q) => q.eq("orgId", s.orgId))
-      .take(500);
-    const staleOffers = loads.filter((l) =>
-      l.offerStatus === "pending" &&
-      l.driverId &&
-      l._creationTime < now - DAY
-    );
-    if (staleOffers.length > 0 && !(await wasRecentlyNotified("⏰ Pending driver offers"))) {
-      const nums = staleOffers.slice(0, 3).map((l) => l.loadNumber).join(", ");
-      const suffix = staleOffers.length > 3 ? ` and ${staleOffers.length - 3} more` : "";
-      await ctx.db.insert("notifications", {
-        orgId: s.orgId as never,
-        userId: s.userId as never,
-        title: `⏰ ${staleOffers.length} load${staleOffers.length > 1 ? "s" : ""} with pending driver offer`,
-        body: `${nums}${suffix} — driver has not responded in over 24 hours.`,
-        link: "/loads",
-        type: "load",
-      });
-      notificationsSent++;
-    }
-    scanned.push("pending_offers");
-
-    // 5. DELIVERED LOADS WITHOUT POD (>48h since delivery)
-    const deliveredNoPod = loads.filter((l) =>
-      (l.status === "Delivered" || l.status === "POD Pending") &&
-      l.deliveryDate &&
-      l.deliveryDate < now - 2 * DAY
-    );
-    if (deliveredNoPod.length > 0 && !(await wasRecentlyNotified("📋 Missing POD"))) {
-      const nums = deliveredNoPod.slice(0, 3).map((l) => l.loadNumber).join(", ");
-      const suffix = deliveredNoPod.length > 3 ? ` and ${deliveredNoPod.length - 3} more` : "";
-      await ctx.db.insert("notifications", {
-        orgId: s.orgId as never,
-        userId: s.userId as never,
-        title: `📋 ${deliveredNoPod.length} load${deliveredNoPod.length > 1 ? "s" : ""} missing POD`,
-        body: `${nums}${suffix} — delivered over 48 hours ago without proof of delivery.`,
-        link: "/loads",
-        type: "document",
-      });
-      notificationsSent++;
-    }
-    scanned.push("missing_pod");
-
-    return { scanned, notificationsSent, timestamp: now };
+    return { orgsScanned: totalOrgsScanned, totalNotificationsSent, timestamp: Date.now() };
   },
 });
