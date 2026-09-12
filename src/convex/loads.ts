@@ -537,6 +537,88 @@ export const setStatus = mutation({
       });
     }
 
+    // ── Phase 11: Load status change notifications ──────────────────────
+    // Notify dispatcher when a load advances through key operational states.
+    // Only fire for non-draft, non-cancelled transitions that matter.
+    // Uses direct insert (not notify()) to avoid self-notification and to
+    // notify ALL write-role org members — the dispatcher assigned or not.
+    const STATUS_NOTIFICATIONS: Partial<Record<LoadStatus, { title: string; body: string; type: string }>> = {
+      "At Pickup": {
+        title: `📍 ${load.loadNumber} arrived at pickup`,
+        body: `${s.name ?? "Driver"} is at the pickup location.${load.origin ? ` Origin: ${load.origin}` : ""}`,
+        type: "load",
+      },
+      "Loaded": {
+        title: `📦 ${load.loadNumber} loaded`,
+        body: `${s.name ?? "Driver"} has loaded the freight and is ready to depart.`,
+        type: "load",
+      },
+      "In Transit": {
+        title: `🚛 ${load.loadNumber} in transit`,
+        body: `${s.name ?? "Driver"} is on the move.${load.destination ? ` Dest: ${load.destination}` : ""}`,
+        type: "load",
+      },
+      "At Delivery": {
+        title: `📍 ${load.loadNumber} arrived at delivery`,
+        body: `${s.name ?? "Driver"} is at the delivery location.${load.destination ? ` Destination: ${load.destination}` : ""}`,
+        type: "load",
+      },
+      "Delivered": {
+        title: `✅ ${load.loadNumber} delivered`,
+        body: `${s.name ?? "Driver"} has delivered the freight. POD needed to complete.`,
+        type: "load",
+      },
+      "POD Pending": {
+        title: `📋 ${load.loadNumber} POD needed`,
+        body: `Proof of delivery is required to complete this load.`,
+        type: "document",
+      },
+    };
+    const statusNote = STATUS_NOTIFICATIONS[args.status];
+    if (statusNote) {
+      // Find all write-role users in the org and notify them (bounded)
+      const allUsers = await ctx.db
+        .query("users")
+        .withIndex("by_org", (q) => q.eq("orgId", s.orgId))
+        .take(50);
+      const WRITE_ROLES_SET = new Set(["admin", "super_admin", "dispatcher", "operations"]);
+      for (const u of allUsers) {
+        if (u._id === s.userId) continue; // don't notify the actor
+        if (!u.role || !WRITE_ROLES_SET.has(u.role)) continue;
+        await ctx.db.insert("notifications", {
+          orgId: s.orgId as never,
+          userId: u._id as never,
+          title: statusNote.title,
+          body: statusNote.body,
+          link: `/loads/${args.id}`,
+          type: statusNote.type,
+        });
+      }
+
+      // Also create a task for POD Pending to ensure follow-up
+      if (args.status === "POD Pending" || args.status === "Delivered") {
+        const existingTask = await ctx.db
+          .query("tasks")
+          .withIndex("by_org", (q) => q.eq("orgId", s.orgId))
+          .take(200)
+          .then((all) => all.find((t) => t.entityType === "load" && t.entityId === args.id && t.title.includes("POD") && t.status === "Pending"));
+        if (!existingTask) {
+          await ctx.db.insert("tasks", {
+            orgId: s.orgId as never,
+            title: `Collect POD for ${load.loadNumber}`,
+            description: `${load.loadNumber}: ${load.origin ?? "?"} → ${load.destination ?? "?"}. Upload proof of delivery to complete this load.`,
+            type: "Document",
+            entityType: "load",
+            entityId: args.id,
+            status: "Pending",
+            priority: "High",
+            dueAt: args.status === "Delivered" ? Date.now() + 3 * 864e5 : undefined, // 3 days if just delivered
+            createdBy: s.userId as never,
+          });
+        }
+      }
+    }
+
     return { ok: true };
   },
 });

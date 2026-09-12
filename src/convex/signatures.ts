@@ -397,6 +397,21 @@ export const signDocument = mutation({
           type: "document",
         });
       }
+    } else if (req.sequential) {
+      // Phase 11: Notify the NEXT signer in a sequential request
+      const sortedSigners = allSigners
+        .filter((sr) => sr.status === "pending" || sr.status === "viewed")
+        .sort((a, b) => a.order - b.order);
+      const nextSigner = sortedSigners[0];
+      if (nextSigner && nextSigner.signerUserId) {
+        const { notify } = await import("./notifications");
+        await notify(ctx, s, {
+          title: "Your Signature Is Required",
+          body: `A document is ready for your signature. Previous signer (${row.signerName}) has signed.`,
+          link: `/sign/${req._id}`,
+          type: "document",
+        });
+      }
     }
 
     return { ok: true, completed: allSigned, signatureId: sigId };
