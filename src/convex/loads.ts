@@ -685,18 +685,39 @@ export const assignResources = mutation({
     await audit(ctx, s, { action: "load.resources.assigned", entity: "load", entityId: args.id, metadata: { ...patch } });
 
     // Notify the driver when they are assigned to a load.
+    // Bug fix (Phase 12): find the user record linked to this driver and notify THEM,
+    // not the dispatcher who made the assignment.
     if (args.driverId) {
       const driver = await ctx.db.get(args.driverId);
       const load = await ctx.db.get(args.id);
       if (driver && load) {
-        await ctx.db.insert("notifications", {
-          orgId: s.orgId as never,
-          userId: s.userId as never,
-          title: `Load assigned to ${driver.name}`,
-          body: `${(load as any).loadNumber}: ${(load as any).origin ?? "?"} → ${(load as any).destination ?? "?"}`,
-          link: `/loads/${args.id}`,
-          type: "load",
-        });
+        // Notify the driver's user account (users.driverId links to drivers._id)
+        const driverUser = await ctx.db
+          .query("users")
+          .withIndex("by_org", (q) => q.eq("orgId", s.orgId))
+          .take(100)
+          .then((users) => users.find((u) => u.driverId === args.driverId));
+        if (driverUser && driverUser._id !== s.userId) {
+          await ctx.db.insert("notifications", {
+            orgId: s.orgId as never,
+            userId: driverUser._id as never,
+            title: `🚛 New load assigned: ${(load as any).loadNumber}`,
+            body: `You have been assigned a load: ${(load as any).origin ?? "?"} → ${(load as any).destination ?? "?"}`,
+            link: `/portal/driver`,
+            type: "load",
+          });
+        }
+        // Also notify the dispatcher that the assignment was made
+        if (s.userId !== driverUser?._id) {
+          await ctx.db.insert("notifications", {
+            orgId: s.orgId as never,
+            userId: s.userId as never,
+            title: `Load assigned to ${driver.name}`,
+            body: `${(load as any).loadNumber}: ${(load as any).origin ?? "?"} → ${(load as any).destination ?? "?"}`,
+            link: `/loads/${args.id}`,
+            type: "load",
+          });
+        }
       }
     }
 
