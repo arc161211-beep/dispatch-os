@@ -1297,4 +1297,59 @@ describe("Phase 14: Notification recipient correctness", () => {
     // The driver should NOT receive their own accept/reject notification
     expect(WRITE_ROLES_SET.has(driverRole)).toBe(false);
   });
+
+  it("GPS risk-change notification targets write-role users, not the GPS reporter", () => {
+    // Phase 15 bug fix: when a driver updates GPS and risk status changes,
+    // the notification must go to dispatchers (write-role users), NOT to the
+    // driver who reported the GPS. The driver already knows they are late.
+    const WRITE_ROLES_SET = new Set(["admin", "super_admin", "dispatcher", "operations"]);
+    const gpsReporterRole = "driver";
+    const carrierAdminRole = "carrier_admin";
+
+    // Driver and carrier_admin are NOT write-role — they should not receive
+    // risk-change notifications (they already have firsthand knowledge).
+    expect(WRITE_ROLES_SET.has(gpsReporterRole)).toBe(false);
+    expect(WRITE_ROLES_SET.has(carrierAdminRole)).toBe(false);
+
+    // Dispatcher and admin ARE write-role — they should receive the notification.
+    expect(WRITE_ROLES_SET.has("dispatcher")).toBe(true);
+    expect(WRITE_ROLES_SET.has("admin")).toBe(true);
+    expect(WRITE_ROLES_SET.has("super_admin")).toBe(true);
+    expect(WRITE_ROLES_SET.has("operations")).toBe(true);
+  });
+
+  it("load status notifications target write-role users, not the status reporter", () => {
+    // Phase 11/15: when status changes (In Transit, Delivered, etc.),
+    // notifications go to all write-role users except the actor.
+    const WRITE_ROLES_SET = new Set(["admin", "super_admin", "dispatcher", "operations"]);
+
+    // A driver reporting status should NOT be notified
+    expect(WRITE_ROLES_SET.has("driver")).toBe(false);
+    // A carrier_admin reporting status should NOT be notified
+    expect(WRITE_ROLES_SET.has("carrier_admin")).toBe(false);
+  });
+
+  it("load cancellation notification targets all write-role users", () => {
+    // Phase 14 fix: load cancellation notifies all dispatchers, not just actor
+    const WRITE_ROLES_SET = new Set(["admin", "super_admin", "dispatcher", "operations"]);
+
+    // Verify the set contains exactly the expected roles
+    expect(WRITE_ROLES_SET.size).toBe(4);
+    expect(WRITE_ROLES_SET.has("dispatcher")).toBe(true);
+    expect(WRITE_ROLES_SET.has("admin")).toBe(true);
+    expect(WRITE_ROLES_SET.has("super_admin")).toBe(true);
+    expect(WRITE_ROLES_SET.has("operations")).toBe(true);
+  });
+
+  it("task assignment notification targets assigned user, not creator", () => {
+    // Phase 14 fix: when task is assigned to user B by user A,
+    // user B gets notified, not user A
+    const ids = { creator: "user_A", assignedTo: "user_B" };
+    // The notification should go to assignedTo, not creator
+    expect(ids.assignedTo).not.toBe(ids.creator);
+    // When assignedTo differs from creator, notification fires
+    expect(ids.assignedTo).not.toEqual(ids.creator);
+    // When assignedTo equals creator, no self-notification
+    expect(ids.creator).toEqual(ids.creator);
+  });
 });

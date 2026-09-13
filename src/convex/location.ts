@@ -349,21 +349,30 @@ export const updateTruckLocation = mutation({
         delayMinutes,
       });
 
-      // Notify dispatchers when risk status changes (deduped)
+      // Notify ALL write-role users (dispatchers) when risk status changes.
+      // The GPS reporter (s.userId) is usually the driver — they already know
+      // they are late. Dispatchers need to be notified.
       if (prevRisk !== deliveryRisk && (deliveryRisk === "at_risk" || deliveryRisk === "delayed") && load.driverId) {
-        const driver = await ctx.db.get(load.driverId);
-        await ctx.db.insert("notifications", {
-          orgId: s.orgId as never,
-          userId: s.userId as never,
-          title: deliveryRisk === "delayed"
-            ? `⚠ DELAYED: Load ${load.loadNumber}`
-            : `⚡ At Risk: Load ${load.loadNumber}`,
-          body: deliveryRisk === "delayed"
-            ? `${load.loadNumber} is estimated ${delayMinutes} min late. ETA: ${new Date(etaTimestamp).toLocaleTimeString()}`
-            : `${load.loadNumber} may be late. ETA: ${new Date(etaTimestamp).toLocaleTimeString()}`,
-          link: `/loads/${load._id}`,
-          type: "load",
-        });
+        const WRITE_ROLES_RISK = new Set(["admin", "super_admin", "dispatcher", "operations"]);
+        const riskUsers = await ctx.db
+          .query("users")
+          .withIndex("by_org", (q: any) => q.eq("orgId", s.orgId))
+          .take(50);
+        for (const u of riskUsers) {
+          if (!u.role || !WRITE_ROLES_RISK.has(u.role)) continue;
+          await ctx.db.insert("notifications", {
+            orgId: s.orgId as never,
+            userId: u._id as never,
+            title: deliveryRisk === "delayed"
+              ? `⚠ DELAYED: Load ${load.loadNumber}`
+              : `⚡ At Risk: Load ${load.loadNumber}`,
+            body: deliveryRisk === "delayed"
+              ? `${load.loadNumber} is estimated ${delayMinutes} min late. ETA: ${new Date(etaTimestamp).toLocaleTimeString()}`
+              : `${load.loadNumber} may be late. ETA: ${new Date(etaTimestamp).toLocaleTimeString()}`,
+            link: `/loads/${load._id}`,
+            type: "load",
+          });
+        }
       }
     }
 
