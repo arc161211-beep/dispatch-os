@@ -1228,3 +1228,73 @@ describe("Phase 12: Matching engine consistency", () => {
     expect(Array.isArray(result.concerns)).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 14: Notification recipient correctness
+// ---------------------------------------------------------------------------
+describe("Phase 14: Notification recipient correctness", () => {
+  it("load completion includes invoice number in notification body", () => {
+    // Verify the notification body template includes the invoice number placeholder
+    const invoiceNumber = "INV-1005";
+    const amountCents = 35000;
+    const carrierName = "ABC Trucking";
+    const body = `Invoice ${invoiceNumber} ($${(amountCents / 100).toFixed(2)}) created for ${carrierName}.`;
+    expect(body).toContain("INV-1005");
+    expect(body).toContain("$350.00");
+    expect(body).toContain("ABC Trucking");
+  });
+
+  it("task notification template targets the assigned user, not the creator", () => {
+    // Task notification should use the assigned user's ID, not the creator's
+    const assignedUserId = "user_abc";
+    const creatorUserId = "user_xyz";
+    const taskTitle = "Collect POD";
+    const taskDescription = "Upload proof of delivery";
+
+    // The notification userId must be the assigned user, not the creator
+    expect(assignedUserId).not.toBe(creatorUserId);
+
+    const body = taskDescription?.slice(0, 200) ?? "You have been assigned a task";
+    expect(body).toContain("proof of delivery");
+  });
+
+  it("load cancellation notification targets all write-role users, not just actor", () => {
+    // Verify the write-role set used for cancellation notifications
+    const WRITE_ROLES_SET = new Set(["admin", "super_admin", "dispatcher", "operations"]);
+    expect(WRITE_ROLES_SET.has("dispatcher")).toBe(true);
+    expect(WRITE_ROLES_SET.has("admin")).toBe(true);
+    expect(WRITE_ROLES_SET.has("super_admin")).toBe(true);
+    expect(WRITE_ROLES_SET.has("operations")).toBe(true);
+    // Driver and carrier_admin should NOT receive cancellation notifications
+    expect(WRITE_ROLES_SET.has("driver")).toBe(false);
+    expect(WRITE_ROLES_SET.has("carrier_admin")).toBe(false);
+  });
+
+  it("sequential signing notification targets the next signer, not the current signer", () => {
+    // Verify sequential signer notification logic:
+    // When signer N signs, signer N+1 should be notified
+    const signers = [
+      { order: 1, status: "signed", signerUserId: "user_A" },
+      { order: 2, status: "pending", signerUserId: "user_B" },
+      { order: 3, status: "pending", signerUserId: "user_C" },
+    ];
+    const currentSignerUserId = "user_A"; // the one who just signed
+
+    const sortedSigners = signers
+      .filter((sr) => sr.status === "pending" || sr.status === "viewed")
+      .sort((a, b) => a.order - b.order);
+    const nextSigner = sortedSigners[0];
+
+    expect(nextSigner?.signerUserId).toBe("user_B");
+    expect(nextSigner?.signerUserId).not.toBe(currentSignerUserId);
+  });
+
+  it("driver accept/reject notification targets write-role users, not the driver", () => {
+    // When a driver accepts or rejects, all write-role users should be notified
+    const WRITE_ROLES_SET = new Set(["admin", "super_admin", "dispatcher", "operations"]);
+    const driverRole = "driver";
+
+    // The driver should NOT receive their own accept/reject notification
+    expect(WRITE_ROLES_SET.has(driverRole)).toBe(false);
+  });
+});

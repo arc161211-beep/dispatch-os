@@ -528,13 +528,23 @@ export const setStatus = mutation({
     }
 
     if (args.status === "Cancelled") {
-      await ctx.db.insert("notifications", {
-        orgId: s.orgId as never,
-        userId: s.userId as never,
-        title: `Load ${load.loadNumber} cancelled`,
-        body: "Resources have been freed.",
-        type: "load",
-      });
+      // Notify all write-role users (not just the actor) so dispatchers know resources are freed.
+      const CANCEL_WRITE_ROLES = new Set(["admin", "super_admin", "dispatcher", "operations"]);
+      const cancelUsers = await ctx.db
+        .query("users")
+        .withIndex("by_org", (q) => q.eq("orgId", s.orgId))
+        .take(50);
+      for (const u of cancelUsers) {
+        if (!u.role || !CANCEL_WRITE_ROLES.has(u.role)) continue;
+        await ctx.db.insert("notifications", {
+          orgId: s.orgId as never,
+          userId: u._id as never,
+          title: `🚫 Load ${load.loadNumber} cancelled`,
+          body: `${s.name ?? "User"} cancelled this load. Resources have been freed.`,
+          link: `/loads/${args.id}`,
+          type: "load",
+        });
+      }
     }
 
     // ── Phase 11: Load status change notifications ──────────────────────

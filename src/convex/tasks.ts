@@ -59,6 +59,19 @@ export const create = mutation({
       createdBy: s.userId as never,
     });
     await audit(ctx, s, { action: "task.created", entity: "task", entityId: id, metadata: { title: args.input.title, entityType: args.input.entityType } });
+
+    // Notify the assigned user (if someone other than the creator is assigned)
+    if (args.input.assignedTo && args.input.assignedTo !== s.userId) {
+      await ctx.db.insert("notifications", {
+        orgId: s.orgId as never,
+        userId: args.input.assignedTo as never,
+        title: `New task: ${reqString(args.input.title, "Title", 300)}`,
+        body: args.input.description?.slice(0, 200) ?? (s.name ? `${s.name} assigned you a task` : "You have been assigned a task"),
+        link: "/tasks",
+        type: "task",
+      });
+    }
+
     return { id };
   },
 });
@@ -75,6 +88,19 @@ export const update = mutation({
     }
     await ctx.db.patch(args.id, patch as never);
     await audit(ctx, s, { action: "task.updated", entity: "task", entityId: args.id, metadata: { fields: Object.keys(patch) } });
+
+    // Notify newly assigned user when assignment changes
+    if (args.input.assignedTo && args.input.assignedTo !== task.assignedTo && args.input.assignedTo !== s.userId) {
+      await ctx.db.insert("notifications", {
+        orgId: s.orgId as never,
+        userId: args.input.assignedTo as never,
+        title: `Task assigned to you: ${task.title}`,
+        body: s.name ? `${s.name} assigned you a task` : "You have been assigned a task",
+        link: "/tasks",
+        type: "task",
+      });
+    }
+
     return { ok: true };
   },
 });
