@@ -27,4 +27,21 @@ crons.daily(
   internal.dashboard.scheduledProactiveScan,
 );
 
+// ---------------------------------------------------------------------------
+// PHASE 14: Scheduled Data Retention Cleanup
+//
+// Runs once weekly (Sunday 03:00 UTC) to clean up old location history,
+// messages, and audit logs based on each organization's configured retention
+// policies. Only orgs with configured retention days are cleaned up.
+//
+// Bounded: max 500 records per entity type per org per run.
+// Safe to run repeatedly (idempotent — deletes only expired records).
+// ---------------------------------------------------------------------------
+
+crons.weekly(
+  "data retention cleanup",
+  { hourUTC: 3, minuteUTC: 7, dayOfWeek: "sunday" },
+  internal.retention.scheduledRetentionCleanup,
+);
+
 export default crons;

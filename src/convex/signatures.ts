@@ -387,10 +387,11 @@ export const signDocument = mutation({
         entityId: req._id,
         metadata: { totalSigners: allSigners.length },
       });
-      // Notify the creator
+      // Notify the request creator (direct insert for cross-user notification)
       if (req.createdBy !== s.userId) {
-        const { notify } = await import("./notifications");
-        await notify(ctx, s, {
+        await ctx.db.insert("notifications", {
+          orgId: s.orgId as never,
+          userId: req.createdBy as never,
           title: "Signature Request Completed",
           body: `All ${allSigners.length} signer(s) have signed the document.`,
           link: `/sign/${req._id}`,
@@ -398,14 +399,15 @@ export const signDocument = mutation({
         });
       }
     } else if (req.sequential) {
-      // Phase 11: Notify the NEXT signer in a sequential request
+      // Notify the NEXT signer in a sequential request
       const sortedSigners = allSigners
         .filter((sr) => sr.status === "pending" || sr.status === "viewed")
         .sort((a, b) => a.order - b.order);
       const nextSigner = sortedSigners[0];
-      if (nextSigner && nextSigner.signerUserId) {
-        const { notify } = await import("./notifications");
-        await notify(ctx, s, {
+      if (nextSigner && nextSigner.signerUserId && nextSigner.signerUserId !== s.userId) {
+        await ctx.db.insert("notifications", {
+          orgId: s.orgId as never,
+          userId: nextSigner.signerUserId as never,
           title: "Your Signature Is Required",
           body: `A document is ready for your signature. Previous signer (${row.signerName}) has signed.`,
           link: `/sign/${req._id}`,

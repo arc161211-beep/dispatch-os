@@ -897,15 +897,23 @@ export const acceptLoad = mutation({
     });
     await audit(ctx, s, { action: "load.offer.accepted", entity: "load", entityId: args.loadId, metadata: { driverId: s.driverId, loadNumber: load.loadNumber } });
 
-    // Notify dispatchers
-    await ctx.db.insert("notifications", {
-      orgId: s.orgId as never,
-      userId: s.userId as never,
-      title: `Load ${load.loadNumber} accepted by driver`,
-      body: `${s.name ?? "Driver"} accepted the offer for ${load.origin ?? "?"} → ${load.destination ?? "?"}`,
-      link: `/loads/${args.loadId}`,
-      type: "load",
-    });
+    // Notify ALL write-role users (dispatchers) — not the driver themselves.
+    const WRITE_ROLES_SET = new Set(["admin", "super_admin", "dispatcher", "operations"]);
+    const writeUsers = await ctx.db
+      .query("users")
+      .withIndex("by_org", (q) => q.eq("orgId", s.orgId))
+      .take(50);
+    for (const u of writeUsers) {
+      if (!u.role || !WRITE_ROLES_SET.has(u.role)) continue;
+      await ctx.db.insert("notifications", {
+        orgId: s.orgId as never,
+        userId: u._id as never,
+        title: `✅ Load ${load.loadNumber} accepted by driver`,
+        body: `${s.name ?? "Driver"} accepted the offer for ${load.origin ?? "?"} → ${load.destination ?? "?"}`,
+        link: `/loads/${args.loadId}`,
+        type: "load",
+      });
+    }
 
     return { ok: true };
   },
@@ -948,15 +956,23 @@ export const rejectLoad = mutation({
     });
     await audit(ctx, s, { action: "load.offer.rejected", entity: "load", entityId: args.loadId, metadata: { driverId: s.driverId, loadNumber: load.loadNumber, reason: args.reason } });
 
-    // Notify dispatchers
-    await ctx.db.insert("notifications", {
-      orgId: s.orgId as never,
-      userId: s.userId as never,
-      title: `Load ${load.loadNumber} rejected by driver`,
-      body: `${s.name ?? "Driver"} rejected the offer${args.reason ? `: ${args.reason.slice(0, 200)}` : ""}`,
-      link: `/loads/${args.loadId}`,
-      type: "load",
-    });
+    // Notify ALL write-role users (dispatchers) — not the driver themselves.
+    const WRITE_ROLES_SET = new Set(["admin", "super_admin", "dispatcher", "operations"]);
+    const writeUsers = await ctx.db
+      .query("users")
+      .withIndex("by_org", (q) => q.eq("orgId", s.orgId))
+      .take(50);
+    for (const u of writeUsers) {
+      if (!u.role || !WRITE_ROLES_SET.has(u.role)) continue;
+      await ctx.db.insert("notifications", {
+        orgId: s.orgId as never,
+        userId: u._id as never,
+        title: `❌ Load ${load.loadNumber} rejected by driver`,
+        body: `${s.name ?? "Driver"} rejected the offer${args.reason ? `: ${args.reason.slice(0, 200)}` : ""}`,
+        link: `/loads/${args.loadId}`,
+        type: "load",
+      });
+    }
 
     return { ok: true };
   },

@@ -14,7 +14,7 @@
 //   - Returns a count of deleted records for admin visibility.
 // ---------------------------------------------------------------------------
 
-import { mutation } from "./_generated/server";
+import { mutation, internalMutation } from "./_generated/server";
 import { requireAdmin } from "./lib/context";
 
 const BATCH_SIZE = 500;
@@ -215,5 +215,64 @@ export const getRetentionStatus = mutation({
       messageRetentionEnabled: msgDays > 0,
       auditLogRetentionEnabled: auditDays > 0,
     };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Cron-compatible scheduled retention cleanup.
+// Iterates all organizations and applies their configured retention policies.
+// Bounded: max 500 records per entity type per org. Safe to run repeatedly.
+// ---------------------------------------------------------------------------
+export const scheduledRetentionCleanup = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const DAY = 86_400_000;
+    const BATCH = 500;
+    const orgs = await ctx.db.query("organizations").take(100);
+    let totalDeleted = 0;
+
+    for (const org of orgs) {
+      const settings = await ctx.db
+        .query("settings")
+        .withIndex("by_org", (q) => q.eq("orgId", org._id))
+        .first();
+      if (!settings?.dataRetention) continue;
+
+      const { locationHistoryDays, messageRetentionDays, auditLogRetentionDays } = settings.dataRetention;
+
+      // Location history cleanup
+      if (locationHistoryDays && locationHistoryDays > 0) {
+        const cutoff = Date.now() - locationHistoryDays * DAY;
+        const old = await ctx.db
+          .query("locationHistory")
+          .withIndex("by_org", (q) => q.eq("orgId", org._id))
+          .filter((q) => q.lt(q.field("at"), cutoff))
+          .take(BATCH);
+        for (const row of old) { await ctx.db.delete(row._id); totalDeleted++; }
+      }
+
+      // Message cleanup
+      if (messageRetentionDays && messageRetentionDays > 0) {
+        const cutoff = Date.now() - messageRetentionDays * DAY;
+        const old = await ctx.db
+          .query("messages")
+          .withIndex("by_org", (q) => q.eq("orgId", org._id))
+          .filter((q) => q.lt(q.field("_creationTime"), cutoff))
+          .take(BATCH);
+        for (const row of old) { await ctx.db.delete(row._id); totalDeleted++; }
+      }
+
+      // Audit log cleanup
+      if (auditLogRetentionDays && auditLogRetentionDays > 0) {
+        const cutoff = Date.now() - auditLogRetentionDays * DAY;
+        const old = await ctx.db
+          .query("auditLogs")
+          .withIndex("by_org_at", (q) => q.eq("orgId", org._id).lt("at", cutoff))
+          .take(BATCH);
+        for (const row of old) { await ctx.db.delete(row._id); totalDeleted++; }
+      }
+    }
+
+    return { orgsScanned: orgs.length, totalDeleted, timestamp: Date.now() };
   },
 });
